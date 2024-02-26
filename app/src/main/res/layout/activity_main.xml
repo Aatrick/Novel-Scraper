@@ -8,7 +8,7 @@
     tools:context=".MainActivity">
 
 
-    
+
 
     <ScrollView
         android:layout_width="match_parent"
@@ -20,19 +20,33 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <EditText
-                android:id="@+id/urlInput"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="Enter URL here"
-                android:inputType="textUri" />
+                android:layout_height="match_parent"
+                android:orientation="horizontal">
 
-            <Button
-                android:id="@+id/scrapButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Scrap URL" />
+                <EditText
+                    android:id="@+id/urlInput"
+                    android:layout_width="280dp"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/poppins_light"
+                    android:hint="Enter URL here"
+                    android:inputType="textUri" />
 
+                <Button
+                    android:id="@+id/scrapButton"
+                    android:layout_width="49dp"
+                    android:layout_height="50dp"
+                    android:backgroundTint="#00000000"
+                    android:fontFamily="@font/poppins_light"
+                    android:padding="0dp"
+                    android:text="Scrap"
+                    android:textColor="#FFFFFF"
+                    android:textColorHighlight="#000000"
+                    android:textColorHint="#000000"
+                    android:textColorLink="#000000" />
+
+            </LinearLayout>
 
 
         </LinearLayout>
