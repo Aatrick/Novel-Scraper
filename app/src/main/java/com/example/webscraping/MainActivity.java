@@ -47,17 +47,28 @@ public class MainActivity extends AppCompatActivity {
         // Set the retrieved URL to the EditText
         urlInput.setText(url);
 
-        // Set the retrieved paragraphs to the TextView
-        TextView textView = new TextView(MainActivity.this);
-        textView.setText(data);
-        textView.setTextSize(20);
-        textView.setLineSpacing(0, 1.5f); // Set line spacing to 1.5 times the default
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                textView.setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD); // Justify the text
+        // Set the retrieved paragraphs to the TextView the same way as in onPostExecute
+        if (!data.isEmpty()) {
+            String[] paragraphs = data.substring(1, data.length() - 1).split(", ");
+            for (String paragraph : paragraphs) {
+                TextView textView = new TextView(this);
+                textView.setText(paragraph);
+                textView.setTextSize(20);
+                LinearLayout.LayoutParams LayoutParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+                LayoutParams.setMargins(0, 10, 0, 10);
+                textView.setLayoutParams(LayoutParams);
+                textView.setLineSpacing(0, 1.5f);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        textView.setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD);
+                    }
+                }
+                parentLayout.addView(textView);
             }
         }
-        parentLayout.addView(textView);
 
         scrapButton.setOnClickListener(v -> {
             String url1 = urlInput.getText().toString();
