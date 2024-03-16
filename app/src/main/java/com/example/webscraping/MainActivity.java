@@ -77,7 +77,7 @@ public class MainActivity extends AppCompatActivity {
     }
         
 
-
+    //TODO: add image scraping functionality, images are contained in between p tags and should be displayed in between the paragraphs with glide
     private class WebScrapingTask extends AsyncTask<String, Void, List<String>> {
         @Override
         protected List<String> doInBackground(String... strings) {
@@ -85,9 +85,13 @@ public class MainActivity extends AppCompatActivity {
             List<String> paragraphs = new ArrayList<>();
             try {
                 Document document = Jsoup.connect(url).get();
-                Elements pElements = document.select("p");//select all paragraph tags and add two return to the line in between each paragraph
-                for (Element pElement : pElements) {
-                    paragraphs.add(pElement.text() + "\n\n");
+                Elements Elements = document.select("p, img");
+                for (Element Element : Elements) {
+                    if (Element.tagName().equals("p")){
+                        paragraphs.add(Element.text() + "\n\n");}
+                        else if (Element.tagName().equals("img")){
+                            paragraphs.add(Element.attr("src"));
+                        }
                 }
             } catch (IOException e) {
                 e.printStackTrace();
