@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'com.aatricks.novelscraper'
+    namespace 'com.example.webscraping'
     compileSdk 33
 
     defaultConfig {
-        applicationId "com.aatricks.novelscraper"
+        applicationId "com.example.webscraping"
         minSdk 24
         targetSdk 33
         versionCode 1
@@ -38,4 +38,5 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
     implementation 'org.jsoup:jsoup:1.14.1'
     implementation 'com.squareup.picasso:picasso:2.71828'
+
 }

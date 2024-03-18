@@ -1,4 +1,4 @@
-package com.example.novelscraper;
+package com.example.webscraping;
 
 import android.content.Context;
 
