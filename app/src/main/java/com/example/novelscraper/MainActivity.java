@@ -1,4 +1,4 @@
-package com.example.webscraping;
+package com.example.novelscraper;
 
 import android.content.SharedPreferences;
 import android.graphics.text.LineBreaker;
@@ -10,11 +10,15 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+
+import com.aatricks.novelscraper.R;
+import com.squareup.picasso.Picasso;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -77,7 +81,7 @@ public class MainActivity extends AppCompatActivity {
     }
         
 
-    //TODO: add image scraping functionality, images are contained in between p tags and should be displayed in between the paragraphs with glide
+    //TODO: add image scraping functionality, images are contained in between p tags and should be displayed in between the paragraphs with picasso
     private class WebScrapingTask extends AsyncTask<String, Void, List<String>> {
         @Override
         protected List<String> doInBackground(String... strings) {
@@ -105,54 +109,45 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @Override
-            protected void onPostExecute(List<String> paragraphs) {
-            // Update the text in existing TextViews
-            for (int i = 0; i < parentLayout.getChildCount(); i++) { 
+        protected void onPostExecute(List<String> paragraphs) {
+            // Remove all existing TextViews and ImageViews
+            for (int i = 0; i < parentLayout.getChildCount(); i++) {
                 View view = parentLayout.getChildAt(i);
-                if (view instanceof TextView) {
-                    TextView textView = (TextView) view;
-                    if (i < paragraphs.size()) {
-                        textView.setText(paragraphs.get(i));
-                    } else {
-                        textView.setText("");
-                    }
-                    textView.setLineSpacing(0,1.5f); // Set line spacing to 1.5 times the default
-
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            textView.setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD); // Justify the text}
-                        }
-                    }
-
+                if (view instanceof TextView || view instanceof ImageView) {
+                    parentLayout.removeView(view);
+                    i--; // Decrement the counter as the child count has changed
                 }
             }
-            
-            
-            // Add new TextViews if needed
-            for (int i = parentLayout.getChildCount(); i < paragraphs.size(); i++) {
-                TextView textView = new TextView(MainActivity.this);
-                textView.setText(paragraphs.get(i));
-                textView.setTextSize(20);
-
-                // Set the margin
-                LinearLayout.LayoutParams LayoutParams = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                );
-
-                LayoutParams.setMargins (0,10,0,10); // Top and bottom margins are 10
-                textView.setLayoutParams(LayoutParams);
-
-                textView.setLineSpacing (0,1.5f); // Set line spacing to 1.5 times the default
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        textView.setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD); // Justify the text
+            //if the paragraph is an image, display it with picasso else display it as a text
+            for (String paragraph : paragraphs) {
+                if (paragraph.contains("http")) {
+                    ImageView imageView = new ImageView(MainActivity.this);
+                    Picasso.get().load(paragraph).into(imageView);
+                    LinearLayout.LayoutParams LayoutParams = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                    );
+                    LayoutParams.setMargins(0, 10, 0, 10);
+                    imageView.setLayoutParams(LayoutParams);
+                    parentLayout.addView(imageView);
+                } else {
+                    TextView textView = new TextView(MainActivity.this);
+                    textView.setText(paragraph);
+                    textView.setTextSize(20);
+                    LinearLayout.LayoutParams LayoutParams = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                    );
+                    LayoutParams.setMargins(0, 10, 0, 10);
+                    textView.setLayoutParams(LayoutParams);
+                    textView.setLineSpacing(0, 1.5f);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            textView.setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD);
+                        }
                     }
+                    parentLayout.addView(textView);
                 }
-
-
-                parentLayout.addView(textView);
             }
         }
     }

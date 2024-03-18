@@ -1,4 +1,4 @@
-package com.example.webscraping;
+package com.example.novelscraper;
 
 import org.junit.Test;
 
