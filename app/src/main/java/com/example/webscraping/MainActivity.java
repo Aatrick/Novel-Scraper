@@ -5,6 +5,7 @@ import android.graphics.text.LineBreaker;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -24,9 +25,16 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okio.BufferedSink;
+import okio.Okio;
 
 public class MainActivity extends AppCompatActivity {
     private LinearLayout parentLayout;
@@ -91,30 +99,51 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-
+//TODO: Add multi chapter support
     private class WebScrapingTask extends AsyncTask<String, Void, List<String>> {
         @Override
         protected List<String> doInBackground(String... strings) {
             String url = strings[0];
             List<String> paragraphs = new ArrayList<>();
+
+            File downloadsDirectory = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+            File htmlFile = new File(downloadsDirectory, url.hashCode() + ".html");
+
+            if (!htmlFile.exists()) {
+                OkHttpClient client = new OkHttpClient();
+                Request request = new Request.Builder().url(url).build();
+
+                try (Response response = client.newCall(request).execute()) {
+                    if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
+
+                    BufferedSink sink = Okio.buffer(Okio.sink(htmlFile));
+                    sink.writeAll(response.body().source());
+                    sink.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
             try {
-                Document document = Jsoup.connect(url).get();
-                Elements Elements = document.select("p, img");
-                for (Element Element : Elements) {
-                    if (Element.tagName().equals("p")){
-                        paragraphs.add(Element.text() + "\n\n");}
-                    else if (Element.tagName().equals("img")){
-                        paragraphs.add(Element.attr("src"));
+                Document document = Jsoup.parse(htmlFile, "UTF-8");
+                Elements elements = document.select("p, img");
+                for (Element element : elements) {
+                    if (element.tagName().equals("p")) {
+                        paragraphs.add(element.text() + "\n\n");
+                    } else if (element.tagName().equals("img")) {
+                        paragraphs.add(element.attr("src"));
                     }
                 }
             } catch (IOException e) {
                 e.printStackTrace();
-            } //save the data for next restart
+            }
+
             SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
             SharedPreferences.Editor myEdit = sharedPreferences.edit();
             myEdit.putString("url", url);
             myEdit.putString("paragraphs", paragraphs.toString());
             myEdit.apply();
+
             return paragraphs;
         }
 
