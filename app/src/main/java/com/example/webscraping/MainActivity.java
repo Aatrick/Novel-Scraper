@@ -1,5 +1,6 @@
 package com.example.webscraping;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -19,6 +20,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
@@ -81,21 +83,7 @@ public class MainActivity extends AppCompatActivity {
                     imageView.setLayoutParams(LayoutParams);
                     parentLayout.addView(imageView);
                 } else {
-                    TextView textView = new TextView(MainActivity.this);
-                    textView.setText(paragraph);
-                    textView.setTextSize(20);
-                    LinearLayout.LayoutParams LayoutParams = new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT
-                    );
-                    LayoutParams.setMargins(0, 10, 0, 10);
-                    textView.setLayoutParams(LayoutParams);
-                    textView.setLineSpacing(0, 1.5f);
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            textView.setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD);
-                        }
-                    }
+                    TextView textView = getView(paragraph);
                     parentLayout.addView(textView);
                 }
             }
@@ -143,36 +131,23 @@ public class MainActivity extends AppCompatActivity {
     private void parsePDF(Uri pdfUri) {
         try {
             InputStream inputStream = getContentResolver().openInputStream(pdfUri);
+            assert inputStream != null;
             PdfReader reader = new PdfReader(inputStream);
             PdfDocument pdfDoc = new PdfDocument(reader);
-            String text = "";
+            StringBuilder text = new StringBuilder();
 
             int numberOfPages = pdfDoc.getNumberOfPages();
             for (int i = 1; i <= numberOfPages; i++) {
-                text += PdfTextExtractor.getTextFromPage(pdfDoc.getPage(i));
+                text.append(PdfTextExtractor.getTextFromPage(pdfDoc.getPage(i)));
             }
 
             pdfDoc.close();
 
             // Now you have the text of the PDF file. You can process it as needed.
             // For example, you can split it into paragraphs and add them to the parent layout.
-            String[] paragraphs = text.split("\n\n");
+            String[] paragraphs = text.toString().split("\n\n");
             for (String paragraph : paragraphs) {
-                TextView textView = new TextView(MainActivity.this);
-                textView.setText(paragraph);
-                textView.setTextSize(20);
-                LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
-                );
-                layoutParams.setMargins(0, 10, 0, 10);
-                textView.setLayoutParams(layoutParams);
-                textView.setLineSpacing(0, 1.5f);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        textView.setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD);
-                    }
-                }
+                TextView textView = getView(paragraph);
                 parentLayout.addView(textView);
             }
         } catch (IOException e) {
@@ -180,7 +155,28 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @NonNull
+    private TextView getView(String paragraph) {
+        TextView textView = new TextView(MainActivity.this);
+        textView.setText(paragraph);
+        textView.setTextSize(20);
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        layoutParams.setMargins(0, 10, 0, 10);
+        textView.setLayoutParams(layoutParams);
+        textView.setLineSpacing(0, 1.5f);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                textView.setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD);
+            }
+        }
+        return textView;
+    }
+
     //TODO: Add multi chapter support
+    @SuppressLint("StaticFieldLeak")
     private class WebScrapingTask extends AsyncTask<String, Void, List<String>> {
         @Override
         protected List<String> doInBackground(String... strings) {
@@ -198,6 +194,7 @@ public class MainActivity extends AppCompatActivity {
                     if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
 
                     BufferedSink sink = Okio.buffer(Okio.sink(htmlFile));
+                    assert response.body() != null;
                     sink.writeAll(response.body().source());
                     sink.close();
                 } catch (IOException e) {
@@ -251,21 +248,7 @@ public class MainActivity extends AppCompatActivity {
                     imageView.setLayoutParams(LayoutParams);
                     parentLayout.addView(imageView);
                 } else {
-                    TextView textView = new TextView(MainActivity.this);
-                    textView.setText(paragraph);
-                    textView.setTextSize(20);
-                    LinearLayout.LayoutParams LayoutParams = new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT
-                    );
-                    LayoutParams.setMargins(0, 10, 0, 10);
-                    textView.setLayoutParams(LayoutParams);
-                    textView.setLineSpacing(0, 1.5f);
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            textView.setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD);
-                        }
-                    }
+                    TextView textView = getView(paragraph);
                     parentLayout.addView(textView);
                 }
             }
@@ -294,10 +277,6 @@ public class MainActivity extends AppCompatActivity {
         // Get the ScrollView
         final ScrollView scrollView = findViewById(R.id.scrollView);
         // Set the scroll position
-        scrollView.post(new Runnable() {
-            public void run() {
-                scrollView.scrollTo(0, scrollY);
-            }
-        });
+        scrollView.post(() -> scrollView.scrollTo(0, scrollY));
     }
 }
