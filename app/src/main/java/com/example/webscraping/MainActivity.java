@@ -10,7 +10,6 @@ import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -98,7 +97,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
-//TODO: Fix the issue of the app crashing when the user selects a file
     private static final int PICK_HTML_FILE = 1;
 
     private void openFileSelector() {
@@ -114,44 +112,135 @@ public class MainActivity extends AppCompatActivity {
     public void onActivityResult(int requestCode, int resultCode, Intent resultData) {
         super.onActivityResult(requestCode, resultCode, resultData);
         if (requestCode == PICK_HTML_FILE && resultCode == Activity.RESULT_OK) {
+            // Check if resultData is null
             if (resultData != null) {
                 Uri uri = resultData.getData();
-                if (uri != null) {
-                    String uriString = uri.toString();
-                    if (uriString.endsWith(".pdf")) {
-                        parsePDF(uri);
-                    } else {
-                        new WebScrapingTask().execute(uriString);
+                // Check if uri is null
+                if (uri != null) { //if the content uri refers to a pdf file, parse it
+                    String type = getContentResolver().getType(uri);
+                    if (type != null) {
+                        if (type.equals("application/pdf")) {
+                            new ParseFileTask().execute(uri);
+                        } else if (type.equals("text/html") || type.equals("application/xhtml+xml")) {
+                            new ParseHTMLFileTask().execute(uri);
+                        }
                     }
                 }
             }
         }
     }
 
-    private void parsePDF(Uri pdfUri) {
-        try {
-            InputStream inputStream = getContentResolver().openInputStream(pdfUri);
-            assert inputStream != null;
-            PdfReader reader = new PdfReader(inputStream);
-            PdfDocument pdfDoc = new PdfDocument(reader);
-            StringBuilder text = new StringBuilder();
+    @SuppressLint("StaticFieldLeak")
+    private class ParseFileTask extends AsyncTask<Uri, Void, List<String>> {
+        @Override
+        protected List<String> doInBackground(Uri... uris) {
+            Uri uri = uris[0];
+            List<String> paragraphs = new ArrayList<>();
 
-            int numberOfPages = pdfDoc.getNumberOfPages();
-            for (int i = 1; i <= numberOfPages; i++) {
-                text.append(PdfTextExtractor.getTextFromPage(pdfDoc.getPage(i)));
+            try {
+                InputStream inputStream = getContentResolver().openInputStream(uri);
+                assert inputStream != null;
+                PdfReader reader = new PdfReader(inputStream);
+                PdfDocument pdfDoc = new PdfDocument(reader);
+                StringBuilder text = new StringBuilder();
+
+                int numberOfPages = pdfDoc.getNumberOfPages();
+                for (int i = 1; i <= numberOfPages; i++) {
+                    text.append(PdfTextExtractor.getTextFromPage(pdfDoc.getPage(i)));
+                }
+
+                pdfDoc.close();
+
+                // Split the text into paragraphs at every newline character followed by a non-whitespace character
+                String[] paragraphsArray = text.toString().split("\n(?=\\S)");
+                for (String paragraph : paragraphsArray) {
+                    // Add a newline character or a space after each paragraph
+                    paragraphs.add(paragraph + "\n");
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
             }
+            SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
+            SharedPreferences.Editor myEdit = sharedPreferences.edit();
+            myEdit.putString("url", "");
+            myEdit.putString("paragraphs", paragraphs.toString());
+            myEdit.apply();
 
-            pdfDoc.close();
+            return paragraphs;
+        }
 
-            // Now you have the text of the PDF file. You can process it as needed.
-            // For example, you can split it into paragraphs and add them to the parent layout.
-            String[] paragraphs = text.toString().split("\n\n");
+        @Override
+        protected void onPostExecute(List<String> paragraphs) {
+            // Clear the existing views in the parent layout
+            parentLayout.removeAllViews();
+
+            // Update the UI with the parsed data
+            // For example, add the paragraphs to the parent layout
             for (String paragraph : paragraphs) {
                 TextView textView = getView(paragraph);
                 parentLayout.addView(textView);
             }
-        } catch (IOException e) {
-            e.printStackTrace();
+        }
+    }
+
+    @SuppressLint("StaticFieldLeak")
+    private class ParseHTMLFileTask extends AsyncTask<Uri, Void, List<String>> {
+        @Override
+        protected List<String> doInBackground(Uri... uris) {
+            Uri uri = uris[0];
+            List<String> paragraphs = new ArrayList<>();
+
+            // Your code to parse the file goes here
+            // For example, if it's an HTML file:
+            try {
+                InputStream inputStream = getContentResolver().openInputStream(uri);
+                assert inputStream != null;
+                Document document = Jsoup.parse(inputStream, "UTF-8", "");
+
+                Elements elements = document.select("p, img");
+                for (Element element : elements) {
+                    if (element.tagName().equals("p")) {
+                        paragraphs.add(element.text() + "\n\n");
+                    } else if (element.tagName().equals("img")) {
+                        paragraphs.add(element.attr("src"));
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
+            SharedPreferences.Editor myEdit = sharedPreferences.edit();
+            myEdit.putString("url", "");
+            myEdit.putString("paragraphs", paragraphs.toString());
+            myEdit.apply();
+
+            return paragraphs;
+        }
+
+        @Override
+        protected void onPostExecute(List<String> paragraphs) {
+            // Clear the existing views in the parent layout
+            parentLayout.removeAllViews();
+
+            // Update the UI with the parsed data
+            // For example, add the paragraphs to the parent layout
+            for (String paragraph : paragraphs) {
+                if (paragraph.contains("http")) {
+                    ImageView imageView = new ImageView(MainActivity.this);
+                    Picasso.get().load(paragraph).into(imageView);
+                    LinearLayout.LayoutParams LayoutParams = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                    );
+                    LayoutParams.setMargins(0, 10, 0, 10);
+                    imageView.setLayoutParams(LayoutParams);
+                    parentLayout.addView(imageView);
+                } else {
+                    TextView textView = getView(paragraph);
+                    parentLayout.addView(textView);
+                }
+            }
         }
     }
 
@@ -227,14 +316,9 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         protected void onPostExecute(List<String> paragraphs) {
-            // Remove all existing TextViews and ImageViews
-            for (int i = 0; i < parentLayout.getChildCount(); i++) {
-                View view = parentLayout.getChildAt(i);
-                if (view instanceof TextView || view instanceof ImageView) {
-                    parentLayout.removeView(view);
-                    i--; // Decrement the counter as the child count has changed
-                }
-            }
+            // Clear the existing views in the parent layout
+            parentLayout.removeAllViews();
+
             //if the paragraph is an image, display it with picasso else display it as a text
             for (String paragraph : paragraphs) {
                 if (paragraph.contains("http")) {
