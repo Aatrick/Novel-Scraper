@@ -37,6 +37,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import okhttp3.OkHttpClient;
@@ -81,11 +82,10 @@ public class MainActivity extends AppCompatActivity { //TODO: Add multi chapter 
                     LayoutParams.setMargins(0, 10, 0, 10);
                     imageView.setLayoutParams(LayoutParams);
                     parentLayout.addView(imageView);
-                } else {
-                    TextView textView = getView(paragraph);
-                    parentLayout.addView(textView);
                 }
             }
+            TextView textView = getView(Arrays.toString(paragraphs));
+            parentLayout.addView(textView);
         }
 
         scrapButton.setOnClickListener(v -> {
@@ -154,18 +154,7 @@ public class MainActivity extends AppCompatActivity { //TODO: Add multi chapter 
 
                 paragraphs.add(text.toString());
                 for (int i = 0; i < paragraphs.size(); i++) {
-                    String paragraph = paragraphs.get(i);
-                    StringBuilder newParagraph = new StringBuilder();
-                    for (int j = 0; j < paragraph.length(); j++) {
-                        char c = paragraph.charAt(j);
-                        newParagraph.append(c);
-                        if (c == '.' && j < paragraph.length() - 1 && paragraph.charAt(j + 1) == '\n') {
-                            newParagraph.append("\n\n");
-                        } else if (c == '\n') {
-                            newParagraph.delete(newParagraph.length() - 1, newParagraph.length());
-                            newParagraph.append(" ");
-                        }
-                    }
+                    StringBuilder newParagraph = getStringBuilder(paragraphs, i);
                     paragraphs.set(i, newParagraph.toString());
                 }
 
@@ -189,7 +178,28 @@ public class MainActivity extends AppCompatActivity { //TODO: Add multi chapter 
             // Update the UI with the parsed data
             TextView textView = getView(paragraphs.toString());
             parentLayout.addView(textView);
+
+            // Scroll to the top of the page
+            ScrollView scrollView = findViewById(R.id.scrollView);
+            scrollView.fullScroll(ScrollView.FOCUS_UP);
         }
+    }
+
+    @NonNull
+    private static StringBuilder getStringBuilder(List<String> paragraphs, int i) {
+        String paragraph = paragraphs.get(i);
+        StringBuilder newParagraph = new StringBuilder();
+        for (int j = 0; j < paragraph.length(); j++) {
+            char c = paragraph.charAt(j);
+            newParagraph.append(c);
+            if (c == '.' && j < paragraph.length() - 1 && paragraph.charAt(j + 1) == '\n') {
+                newParagraph.append("\n\n");
+            } else if (c == '\n') {
+                newParagraph.delete(newParagraph.length() - 1, newParagraph.length());
+                newParagraph.append(" ");
+            }
+        }
+        return newParagraph;
     }
 
     @SuppressLint("StaticFieldLeak")
@@ -344,6 +354,10 @@ public class MainActivity extends AppCompatActivity { //TODO: Add multi chapter 
                     parentLayout.addView(textView);
                 }
             }
+
+            // Scroll to the top of the page
+            ScrollView scrollView = findViewById(R.id.scrollView);
+            scrollView.fullScroll(ScrollView.FOCUS_UP);
         }
     }
     @Override
