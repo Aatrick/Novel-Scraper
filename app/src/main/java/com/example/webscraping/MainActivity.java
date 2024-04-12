@@ -46,7 +46,7 @@ import okhttp3.Response;
 import okio.BufferedSink;
 import okio.Okio;
 
-public class MainActivity extends AppCompatActivity { //TODO: Add multi chapter support
+public class MainActivity extends AppCompatActivity {
     private LinearLayout parentLayout;
     private EditText urlInput;
 
@@ -71,6 +71,8 @@ public class MainActivity extends AppCompatActivity { //TODO: Add multi chapter 
         // Set the retrieved paragraphs and images to the parent layout as TextViews and ImageViews as in the onPostExecute method
         if (!data.isEmpty()) {
             String[] paragraphs = data.substring(1, data.length() - 1).split(", ");
+            //if the url is not empty, style the paragraphs as in url case else style the paragraphs as in file case
+            if (!url.isEmpty()){
             for (String paragraph : paragraphs) {
                 if (paragraph.contains("http")) {
                     ImageView imageView = new ImageView(MainActivity.this);
@@ -82,10 +84,13 @@ public class MainActivity extends AppCompatActivity { //TODO: Add multi chapter 
                     LayoutParams.setMargins(0, 10, 0, 10);
                     imageView.setLayoutParams(LayoutParams);
                     parentLayout.addView(imageView);
+                } else {
+                    TextView textView = getView(paragraph);
+                    parentLayout.addView(textView);
                 }
-            }
+            }}else{
             TextView textView = getView(Arrays.toString(paragraphs));
-            parentLayout.addView(textView);
+            parentLayout.addView(textView);}
         }
 
         scrapButton.setOnClickListener(v -> {
