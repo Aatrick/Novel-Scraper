@@ -45,7 +45,7 @@ import okhttp3.Response;
 import okio.BufferedSink;
 import okio.Okio;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity { //TODO: Add multi chapter support
     private LinearLayout parentLayout;
     private EditText urlInput;
 
@@ -146,17 +146,29 @@ public class MainActivity extends AppCompatActivity {
 
                 int numberOfPages = pdfDoc.getNumberOfPages();
                 for (int i = 1; i <= numberOfPages; i++) {
+                    // Append a newline character at the end of each page's text
                     text.append(PdfTextExtractor.getTextFromPage(pdfDoc.getPage(i)));
                 }
 
                 pdfDoc.close();
 
-                // Split the text into paragraphs at every newline character followed by a non-whitespace character
-                String[] paragraphsArray = text.toString().split("\n(?=\\S)");
-                for (String paragraph : paragraphsArray) {
-                    // Add a newline character or a space after each paragraph
-                    paragraphs.add(paragraph + "\n");
+                paragraphs.add(text.toString());
+                for (int i = 0; i < paragraphs.size(); i++) {
+                    String paragraph = paragraphs.get(i);
+                    StringBuilder newParagraph = new StringBuilder();
+                    for (int j = 0; j < paragraph.length(); j++) {
+                        char c = paragraph.charAt(j);
+                        newParagraph.append(c);
+                        if (c == '.' && j < paragraph.length() - 1 && paragraph.charAt(j + 1) == '\n') {
+                            newParagraph.append("\n\n");
+                        } else if (c == '\n') {
+                            newParagraph.delete(newParagraph.length() - 1, newParagraph.length());
+                            newParagraph.append(" ");
+                        }
+                    }
+                    paragraphs.set(i, newParagraph.toString());
                 }
+
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -175,11 +187,8 @@ public class MainActivity extends AppCompatActivity {
             parentLayout.removeAllViews();
 
             // Update the UI with the parsed data
-            // For example, add the paragraphs to the parent layout
-            for (String paragraph : paragraphs) {
-                TextView textView = getView(paragraph);
-                parentLayout.addView(textView);
-            }
+            TextView textView = getView(paragraphs.toString());
+            parentLayout.addView(textView);
         }
     }
 
@@ -264,7 +273,6 @@ public class MainActivity extends AppCompatActivity {
         return textView;
     }
 
-    //TODO: Add multi chapter support
     @SuppressLint("StaticFieldLeak")
     private class WebScrapingTask extends AsyncTask<String, Void, List<String>> {
         @Override
