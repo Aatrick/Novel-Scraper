@@ -186,7 +186,12 @@ public class MainActivity extends AppCompatActivity {
 
             // Scroll to the top of the page
             ScrollView scrollView = findViewById(R.id.scrollView);
-            scrollView.fullScroll(ScrollView.FOCUS_UP);
+            scrollView.post(new Runnable() {
+                @Override
+                public void run() {
+                    scrollView.fullScroll(ScrollView.FOCUS_UP);
+                }
+            });
         }
     }
 
@@ -265,6 +270,14 @@ public class MainActivity extends AppCompatActivity {
                     parentLayout.addView(textView);
                 }
             }
+            // Scroll to the top of the page
+            ScrollView scrollView = findViewById(R.id.scrollView);
+            scrollView.post(new Runnable() {
+                @Override
+                public void run() {
+                    scrollView.fullScroll(ScrollView.FOCUS_UP);
+                }
+            });
         }
     }
 
