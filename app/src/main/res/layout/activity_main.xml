@@ -43,6 +43,9 @@
         android:layout_height="match_parent"
         android:layout_below="@id/urlInput"
         android:layout_marginTop="51dp"
+        android:scrollbars="vertical"
+        android:scrollbarSize="10dp"
+        android:scrollbarThumbVertical="@color/darkgrey"
         tools:ignore="NotSibling,SpeakableTextPresentCheck">
 
         <LinearLayout
