@@ -47,22 +47,58 @@ import okio.BufferedSink;
 import okio.Okio;
 
 public class MainActivity extends AppCompatActivity {
+    private static final int PICK_HTML_FILE = 1;
     private LinearLayout parentLayout;
     private EditText urlInput;
 
+    @NonNull
+    private static StringBuilder getStringBuilder(List<String> paragraphs, int i) {
+        String paragraph = paragraphs.get(i);
+        StringBuilder newParagraph = new StringBuilder();
+        for (int j = 0; j < paragraph.length(); j++) {
+            char c = paragraph.charAt(j);
+            newParagraph.append(c);
+            if (j > 1) {
+                char prevChar = paragraph.charAt(j - 1);
+                char prevPrevChar = paragraph.charAt(j - 2);
+                if (c == '\n' && prevChar == '.') {
+                    newParagraph.append("\n\n\n");
+                }
+                if (c == '\n' && prevChar == '”') {
+                    newParagraph.append("\n\n\n");
+                }
+                if (c == '\n' && prevPrevChar == '.') {
+                    newParagraph.append("\n\n\n");
+                }
+                if (c == '\n' && prevPrevChar == '”') {
+                    newParagraph.append("\n\n\n");
+                }
+                if (c == '\n' && prevChar == ' ') {
+                    newParagraph.deleteCharAt(newParagraph.length() - 1);
+                }
+                if (c == '\n') {
+                    newParagraph.deleteCharAt(newParagraph.length() - 1);
+                    newParagraph.append(" ");
+                }
+            }
+        }
+        return newParagraph;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState); setContentView(R.layout.activity_main);
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
         Window window = getWindow();
-        window.addFlags (WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-        window.clearFlags (WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
-        window.setStatusBarColor (ContextCompat.getColor(this, R.color.BLACK));
+        window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+        window.setStatusBarColor(ContextCompat.getColor(this, R.color.BLACK));
 
         parentLayout = findViewById(R.id.parentLayout);
-        urlInput=findViewById(R.id.urlInput);
+        urlInput = findViewById(R.id.urlInput);
         Button scrapButton = findViewById(R.id.scrapButton);
         // Retrieve saved data
-        SharedPreferences sharedPreferences = getSharedPreferences ("MySharedPref", MODE_PRIVATE);
+        SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
         String url = sharedPreferences.getString("url", "");
         String data = sharedPreferences.getString("paragraphs", "");
         // Set the retrieved URL to the EditText
@@ -72,25 +108,27 @@ public class MainActivity extends AppCompatActivity {
         if (!data.isEmpty()) {
             String[] paragraphs = data.substring(1, data.length() - 1).split(", ");
             //if the url is not empty, style the paragraphs as in url case else style the paragraphs as in file case
-            if (!url.isEmpty()){
-            for (String paragraph : paragraphs) {
-                if (paragraph.contains("http")) {
-                    ImageView imageView = new ImageView(MainActivity.this);
-                    Picasso.get().load(paragraph).into(imageView);
-                    LinearLayout.LayoutParams LayoutParams = new LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT
-                    );
-                    LayoutParams.setMargins(0, 10, 0, 10);
-                    imageView.setLayoutParams(LayoutParams);
-                    parentLayout.addView(imageView);
-                } else {
-                    TextView textView = getView(paragraph);
-                    parentLayout.addView(textView);
+            if (!url.isEmpty()) {
+                for (String paragraph : paragraphs) {
+                    if (paragraph.contains("http")) {
+                        ImageView imageView = new ImageView(MainActivity.this);
+                        Picasso.get().load(paragraph).into(imageView);
+                        LinearLayout.LayoutParams LayoutParams = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.WRAP_CONTENT,
+                                LinearLayout.LayoutParams.WRAP_CONTENT
+                        );
+                        LayoutParams.setMargins(0, 10, 0, 10);
+                        imageView.setLayoutParams(LayoutParams);
+                        parentLayout.addView(imageView);
+                    } else {
+                        TextView textView = getView(paragraph);
+                        parentLayout.addView(textView);
+                    }
                 }
-            }}else{
-            TextView textView = getView(Arrays.toString(paragraphs));
-            parentLayout.addView(textView);}
+            } else {
+                TextView textView = getView(Arrays.toString(paragraphs));
+                parentLayout.addView(textView);
+            }
         }
 
         scrapButton.setOnClickListener(v -> {
@@ -102,13 +140,12 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
-    private static final int PICK_HTML_FILE = 1;
 
     private void openFileSelector() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
-        String[] mimetypes = {"text/html", "application/xhtml+xml", "application/pdf"};
+        String[] mimetypes = {"text/html", "application/xhtml+xml", "application/pdf", "application/epub"};
         intent.putExtra(Intent.EXTRA_MIME_TYPES, mimetypes);
         startActivityForResult(intent, PICK_HTML_FILE);
     }
@@ -133,6 +170,52 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }
+    }
+
+    @NonNull
+    private TextView getView(String paragraph) {
+        TextView textView = new TextView(MainActivity.this);
+        textView.setText(paragraph);
+        textView.setTextSize(20);
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        layoutParams.setMargins(0, 10, 0, 10);
+        textView.setLayoutParams(layoutParams);
+        textView.setLineSpacing(0, 1.5f);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                textView.setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD);
+            }
+        }
+        return textView;
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // Get the ScrollView
+        ScrollView scrollView = findViewById(R.id.scrollView);
+        // Get the current scroll position
+        int scrollY = scrollView.getScrollY();
+        // Save the scroll position in SharedPreferences
+        SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putInt("scrollY", scrollY);
+        editor.apply();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Get the saved scroll position from SharedPreferences
+        SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
+        int scrollY = sharedPreferences.getInt("scrollY", 0);
+        // Get the ScrollView
+        final ScrollView scrollView = findViewById(R.id.scrollView);
+        // Set the scroll position
+        scrollView.post(() -> scrollView.scrollTo(0, scrollY));
     }
 
     @SuppressLint("StaticFieldLeak")
@@ -193,23 +276,6 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
         }
-    }
-
-    @NonNull
-    private static StringBuilder getStringBuilder(List<String> paragraphs, int i) {
-        String paragraph = paragraphs.get(i);
-        StringBuilder newParagraph = new StringBuilder();
-        for (int j = 0; j < paragraph.length(); j++) {
-            char c = paragraph.charAt(j);
-            newParagraph.append(c);
-            if (c == '.' && j < paragraph.length() - 1 && paragraph.charAt(j + 1) == '\n') {
-                newParagraph.append("\n\n");
-            } else if (c == '\n') {
-                newParagraph.delete(newParagraph.length() - 1, newParagraph.length());
-                newParagraph.append(" ");
-            }
-        }
-        return newParagraph;
     }
 
     @SuppressLint("StaticFieldLeak")
@@ -281,26 +347,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    @NonNull
-    private TextView getView(String paragraph) {
-        TextView textView = new TextView(MainActivity.this);
-        textView.setText(paragraph);
-        textView.setTextSize(20);
-        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        layoutParams.setMargins(0, 10, 0, 10);
-        textView.setLayoutParams(layoutParams);
-        textView.setLineSpacing(0, 1.5f);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                textView.setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD);
-            }
-        }
-        return textView;
-    }
-
     @SuppressLint("StaticFieldLeak")
     private class WebScrapingTask extends AsyncTask<String, Void, List<String>> {
         @Override
@@ -316,7 +362,8 @@ public class MainActivity extends AppCompatActivity {
                 Request request = new Request.Builder().url(url).build();
 
                 try (Response response = client.newCall(request).execute()) {
-                    if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
+                    if (!response.isSuccessful())
+                        throw new IOException("Unexpected code " + response);
 
                     BufferedSink sink = Okio.buffer(Okio.sink(htmlFile));
                     assert response.body() != null;
@@ -377,30 +424,5 @@ public class MainActivity extends AppCompatActivity {
             ScrollView scrollView = findViewById(R.id.scrollView);
             scrollView.fullScroll(ScrollView.FOCUS_UP);
         }
-    }
-    @Override
-    protected void onPause() {
-        super.onPause();
-        // Get the ScrollView
-        ScrollView scrollView = findViewById(R.id.scrollView);
-        // Get the current scroll position
-        int scrollY = scrollView.getScrollY();
-        // Save the scroll position in SharedPreferences
-        SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
-        SharedPreferences.Editor editor = sharedPreferences.edit();
-        editor.putInt("scrollY", scrollY);
-        editor.apply();
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        // Get the saved scroll position from SharedPreferences
-        SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
-        int scrollY = sharedPreferences.getInt("scrollY", 0);
-        // Get the ScrollView
-        final ScrollView scrollView = findViewById(R.id.scrollView);
-        // Set the scroll position
-        scrollView.post(() -> scrollView.scrollTo(0, scrollY));
     }
 }
