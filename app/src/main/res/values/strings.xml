@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">webScraping</string>
+    <string name="app_name">NovelScraper</string>
     <string name="enter_url_here">Enter URL here</string>
     <string name="scrap">Scrap</string>
 </resources>

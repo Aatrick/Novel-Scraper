@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'com.example.webscraping'
+    namespace 'aatricks.novelscraper'
     compileSdk 33
 
     defaultConfig {
-        applicationId "com.example.webscraping"
+        applicationId "aatricks.novelscraper"
         minSdk 24
         targetSdk 33
         versionCode 1
@@ -20,6 +20,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.debug
         }
     }
     compileOptions {
