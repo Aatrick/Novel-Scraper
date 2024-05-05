@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import okhttp3.OkHttpClient;
@@ -61,6 +62,12 @@ public class MainActivity extends AppCompatActivity {
             if (j > 1) {
                 char prevChar = paragraph.charAt(j - 1);
                 char prevPrevChar = paragraph.charAt(j - 2);
+                if (c==',' && prevChar=='.') {
+                    newParagraph.deleteCharAt(newParagraph.length() - 1);
+                }
+                if (c==',' && prevChar=='”') {
+                    newParagraph.deleteCharAt(newParagraph.length() - 1);
+                }
                 if (c == '\n' && prevChar == '.') {
                     newParagraph.append("\n\n\n");
                 }
@@ -104,11 +111,10 @@ public class MainActivity extends AppCompatActivity {
         // Set the retrieved URL to the EditText
         urlInput.setText(url);
 
-        // Set the retrieved paragraphs and images to the parent layout as TextViews and ImageViews as in the onPostExecute method
-        if (!data.isEmpty()) {
-            String[] paragraphs = data.substring(1, data.length() - 1).split(", ");
+
+        if (!data.isEmpty()) {// Set the retrieved paragraphs and images to the parent layout as TextViews and ImageViews as in the WebScrapingTask
+            List<String> paragraphs = Arrays.asList(data.split(" ,"));
             //if the url is not empty, style the paragraphs as in url case else style the paragraphs as in file case
-            if (!url.isEmpty()) {
                 for (String paragraph : paragraphs) {
                     if (paragraph.contains("http")) {
                         ImageView imageView = new ImageView(MainActivity.this);
@@ -121,14 +127,10 @@ public class MainActivity extends AppCompatActivity {
                         imageView.setLayoutParams(LayoutParams);
                         parentLayout.addView(imageView);
                     } else {
-                        TextView textView = getView(paragraph);
+                        TextView textView = getView(getStringBuilder(Collections.singletonList(paragraph), 0)+"\n");
                         parentLayout.addView(textView);
                     }
                 }
-            } else {
-                TextView textView = getView(Arrays.toString(paragraphs));
-                parentLayout.addView(textView);
-            }
         }
 
         scrapButton.setOnClickListener(v -> {
@@ -269,12 +271,7 @@ public class MainActivity extends AppCompatActivity {
 
             // Scroll to the top of the page
             ScrollView scrollView = findViewById(R.id.scrollView);
-            scrollView.post(new Runnable() {
-                @Override
-                public void run() {
-                    scrollView.fullScroll(ScrollView.FOCUS_UP);
-                }
-            });
+            scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_UP));
         }
     }
 
@@ -338,12 +335,7 @@ public class MainActivity extends AppCompatActivity {
             }
             // Scroll to the top of the page
             ScrollView scrollView = findViewById(R.id.scrollView);
-            scrollView.post(new Runnable() {
-                @Override
-                public void run() {
-                    scrollView.fullScroll(ScrollView.FOCUS_UP);
-                }
-            });
+            scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_UP));
         }
     }
 
@@ -379,17 +371,9 @@ public class MainActivity extends AppCompatActivity {
                 Elements elements = document.select("p, img");
                 for (Element element : elements) {
                     if (element.tagName().equals("p")) {
-                        char[] paragraph = element.text().toCharArray();
-                        StringBuilder newParagraph = new StringBuilder();
-                        for (char c : paragraph) {
-                            if (c != '\n') {
-                                newParagraph.append(c);
-                            }
-                            if (c == '\n') {
-                                newParagraph.append("");
-                            }
-                        } newParagraph.append("\n");
-                        paragraphs.add(newParagraph.toString());
+                        String paragraph = element.text();
+                        StringBuilder styledParagraph = getStringBuilder(Collections.singletonList(paragraph), 0);
+                        paragraphs.add(styledParagraph.toString());
                     } else if (element.tagName().equals("img")) {
                         paragraphs.add(element.attr("src"));
                     }
