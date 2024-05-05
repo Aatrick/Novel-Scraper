@@ -379,7 +379,17 @@ public class MainActivity extends AppCompatActivity {
                 Elements elements = document.select("p, img");
                 for (Element element : elements) {
                     if (element.tagName().equals("p")) {
-                        paragraphs.add(element.text() + "\n\n");
+                        char[] paragraph = element.text().toCharArray();
+                        StringBuilder newParagraph = new StringBuilder();
+                        for (char c : paragraph) {
+                            if (c != '\n') {
+                                newParagraph.append(c);
+                            }
+                            if (c == '\n') {
+                                newParagraph.append("");
+                            }
+                        } newParagraph.append("\n");
+                        paragraphs.add(newParagraph.toString());
                     } else if (element.tagName().equals("img")) {
                         paragraphs.add(element.attr("src"));
                     }
