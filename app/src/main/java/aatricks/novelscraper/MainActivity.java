@@ -10,7 +10,6 @@ import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.util.Log;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -38,7 +37,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -112,7 +110,7 @@ public class MainActivity extends AppCompatActivity {
 
 
         if (!data.isEmpty()) {
-            List<String> paragraphs = Arrays.asList(data.split(" ,"));
+            String[] paragraphs = data.split(" ,");
                 for (String paragraph : paragraphs) {
                     if (paragraph.contains("http")) {
                         StringBuilder newParagraph = new StringBuilder();
