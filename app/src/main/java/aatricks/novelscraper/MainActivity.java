@@ -10,6 +10,7 @@ import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.util.Log;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -104,21 +105,30 @@ public class MainActivity extends AppCompatActivity {
         parentLayout = findViewById(R.id.parentLayout);
         urlInput = findViewById(R.id.urlInput);
         Button scrapButton = findViewById(R.id.scrapButton);
-        // Retrieve saved data
         SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
         String url = sharedPreferences.getString("url", "");
         String data = sharedPreferences.getString("paragraphs", "");
-        // Set the retrieved URL to the EditText
         urlInput.setText(url);
 
 
-        if (!data.isEmpty()) {// Set the retrieved paragraphs and images to the parent layout as TextViews and ImageViews as in the WebScrapingTask
+        if (!data.isEmpty()) {
             List<String> paragraphs = Arrays.asList(data.split(" ,"));
-            //if the url is not empty, style the paragraphs as in url case else style the paragraphs as in file case
                 for (String paragraph : paragraphs) {
                     if (paragraph.contains("http")) {
+                        StringBuilder newParagraph = new StringBuilder();
+                        for (int j = 0; j < paragraph.length(); j++) {
+                            if (paragraph.charAt(j) == 'h' && paragraph.charAt(j + 1) == 't' && paragraph.charAt(j + 2) == 't' && paragraph.charAt(j + 3) == 'p') {
+                                for (int k = j; k < paragraph.length(); k++) {
+                                    if (paragraph.charAt(k) == ' ') {
+                                        break;
+                                    }
+                                    newParagraph.append(paragraph.charAt(k));
+                                }
+                                break;
+                            }
+                        }
                         ImageView imageView = new ImageView(MainActivity.this);
-                        Picasso.get().load(paragraph).into(imageView);
+                        Picasso.get().load(String.valueOf(newParagraph)).into(imageView);
                         LinearLayout.LayoutParams LayoutParams = new LinearLayout.LayoutParams(
                                 LinearLayout.LayoutParams.WRAP_CONTENT,
                                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -156,11 +166,9 @@ public class MainActivity extends AppCompatActivity {
     public void onActivityResult(int requestCode, int resultCode, Intent resultData) {
         super.onActivityResult(requestCode, resultCode, resultData);
         if (requestCode == PICK_HTML_FILE && resultCode == Activity.RESULT_OK) {
-            // Check if resultData is null
             if (resultData != null) {
                 Uri uri = resultData.getData();
-                // Check if uri is null
-                if (uri != null) { //if the content uri refers to a pdf file, parse it
+                if (uri != null) {
                     String type = getContentResolver().getType(uri);
                     if (type != null) {
                         if (type.equals("application/pdf")) {
@@ -197,11 +205,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        // Get the ScrollView
         ScrollView scrollView = findViewById(R.id.scrollView);
-        // Get the current scroll position
         int scrollY = scrollView.getScrollY();
-        // Save the scroll position in SharedPreferences
         SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putInt("scrollY", scrollY);
@@ -211,12 +216,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Get the saved scroll position from SharedPreferences
         SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
         int scrollY = sharedPreferences.getInt("scrollY", 0);
-        // Get the ScrollView
         final ScrollView scrollView = findViewById(R.id.scrollView);
-        // Set the scroll position
         scrollView.post(() -> scrollView.scrollTo(0, scrollY));
     }
 
@@ -236,7 +238,6 @@ public class MainActivity extends AppCompatActivity {
 
                 int numberOfPages = pdfDoc.getNumberOfPages();
                 for (int i = 1; i <= numberOfPages; i++) {
-                    // Append a newline character at the end of each page's text
                     text.append(PdfTextExtractor.getTextFromPage(pdfDoc.getPage(i)));
                 }
 
@@ -262,14 +263,9 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         protected void onPostExecute(List<String> paragraphs) {
-            // Clear the existing views in the parent layout
             parentLayout.removeAllViews();
-
-            // Update the UI with the parsed data
             TextView textView = getView(paragraphs.toString());
             parentLayout.addView(textView);
-
-            // Scroll to the top of the page
             ScrollView scrollView = findViewById(R.id.scrollView);
             scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_UP));
         }
@@ -281,14 +277,10 @@ public class MainActivity extends AppCompatActivity {
         protected List<String> doInBackground(Uri... uris) {
             Uri uri = uris[0];
             List<String> paragraphs = new ArrayList<>();
-
-            // Your code to parse the file goes here
-            // For example, if it's an HTML file:
             try {
                 InputStream inputStream = getContentResolver().openInputStream(uri);
                 assert inputStream != null;
                 Document document = Jsoup.parse(inputStream, "UTF-8", "");
-
                 Elements elements = document.select("p, img");
                 for (Element element : elements) {
                     if (element.tagName().equals("p")) {
@@ -312,11 +304,7 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         protected void onPostExecute(List<String> paragraphs) {
-            // Clear the existing views in the parent layout
             parentLayout.removeAllViews();
-
-            // Update the UI with the parsed data
-            // For example, add the paragraphs to the parent layout
             for (String paragraph : paragraphs) {
                 if (paragraph.contains("http")) {
                     ImageView imageView = new ImageView(MainActivity.this);
@@ -333,7 +321,6 @@ public class MainActivity extends AppCompatActivity {
                     parentLayout.addView(textView);
                 }
             }
-            // Scroll to the top of the page
             ScrollView scrollView = findViewById(R.id.scrollView);
             scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_UP));
         }
@@ -393,10 +380,7 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         protected void onPostExecute(List<String> paragraphs) {
-            // Clear the existing views in the parent layout
             parentLayout.removeAllViews();
-
-            //if the paragraph is an image, display it with picasso else display it as a text
             for (String paragraph : paragraphs) {
                 if (paragraph.contains("http")) {
                     ImageView imageView = new ImageView(MainActivity.this);
@@ -413,8 +397,6 @@ public class MainActivity extends AppCompatActivity {
                     parentLayout.addView(textView);
                 }
             }
-
-            // Scroll to the top of the page
             ScrollView scrollView = findViewById(R.id.scrollView);
             scrollView.fullScroll(ScrollView.FOCUS_UP);
         }
