@@ -152,6 +152,14 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
         }
+        Button downloadButton = findViewById(R.id.downloadButton); // replace with your button's ID
+        downloadButton.setOnClickListener(v -> {
+            String url1 = urlInput.getText().toString();
+            for (int i = 0; i < 100; i++) {
+                url1 = incrementChapterInUrl(url1);
+                new ScrapInAdvance().execute(url1);
+            }
+        });
 
         scrollView.getViewTreeObserver().addOnScrollChangedListener(() -> {
             if (!scrollView.canScrollVertically(1) && !isLoading) {
@@ -165,11 +173,11 @@ public class MainActivity extends AppCompatActivity {
         });
 
         scrapButton.setOnClickListener(v -> {
-            String url1 = urlInput.getText().toString();
-            if (url1.isEmpty()) {
+            String url3 = urlInput.getText().toString();
+            if (url3.isEmpty()) {
                 openFileSelector();
             } else {
-                new WebScrapingTask().execute(url1);
+                new WebScrapingTask().execute(url3);
             }
         });
     }
@@ -421,6 +429,35 @@ public class MainActivity extends AppCompatActivity {
             new Handler().postDelayed(() -> isLoading = false, 2000); // 2000 milliseconds = 2 seconds
             ScrollView scrollView = findViewById(R.id.scrollView);
             scrollView.fullScroll(ScrollView.FOCUS_UP);
+        }
+    }
+    @SuppressLint("StaticFieldLeak")
+    private class ScrapInAdvance extends AsyncTask<String, Void, Void> {
+        @Override
+        protected Void doInBackground(String... strings) {
+            String url = strings[0];
+
+            File downloadsDirectory = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+            File htmlFile = new File(downloadsDirectory, url.hashCode() + ".html");
+
+            if (!htmlFile.exists()) {
+                OkHttpClient client = new OkHttpClient();
+                Request request = new Request.Builder().url(url).build();
+
+                try (Response response = client.newCall(request).execute()) {
+                    if (!response.isSuccessful())
+                        throw new IOException("Unexpected code " + response);
+
+                    BufferedSink sink = Okio.buffer(Okio.sink(htmlFile));
+                    assert response.body() != null;
+                    sink.writeAll(response.body().source());
+                    sink.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            return null;
         }
     }
 }

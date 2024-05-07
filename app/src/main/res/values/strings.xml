@@ -2,4 +2,5 @@
     <string name="app_name">NovelScraper</string>
     <string name="enter_url_here">Enter URL here</string>
     <string name="scrap">Scrap</string>
+    <string name="hundred">100</string>
 </resources>

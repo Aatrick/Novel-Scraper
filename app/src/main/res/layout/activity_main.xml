@@ -14,12 +14,12 @@
 
         <EditText
             android:id="@+id/urlInput"
-            android:layout_width="320dp"
+            android:layout_width="315dp"
             android:layout_height="wrap_content"
+            android:autofillHints=""
             android:fontFamily="@font/poppins_light"
             android:hint="@string/enter_url_here"
-            android:inputType="textUri"
-            android:autofillHints="" />
+            android:inputType="textUri" />
 
         <Button
             android:id="@+id/scrapButton"
@@ -29,6 +29,19 @@
             android:fontFamily="@font/poppins_light"
             android:padding="0dp"
             android:text="@string/scrap"
+            android:textColor="#FFFFFF"
+            android:textColorHighlight="#000000"
+            android:textColorHint="#000000"
+            android:textColorLink="#000000"
+            tools:ignore="TextSizeCheck,TouchTargetSizeCheck,VisualLintBounds" />
+        <Button
+            android:id="@+id/downloadButton"
+            android:layout_width="30dp"
+            android:layout_height="50dp"
+            android:backgroundTint="#00000000"
+            android:fontFamily="@font/poppins_light"
+            android:padding="0dp"
+            android:text="@string/hundred"
             android:textColor="#FFFFFF"
             android:textColorHighlight="#000000"
             android:textColorHint="#000000"
