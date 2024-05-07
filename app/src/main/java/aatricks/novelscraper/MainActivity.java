@@ -10,6 +10,7 @@ import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -39,6 +40,8 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -50,7 +53,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int PICK_HTML_FILE = 1;
     private LinearLayout parentLayout;
     private EditText urlInput;
-
+    private boolean isLoading = false;
     @NonNull
     private static StringBuilder getStringBuilder(List<String> paragraphs, int i) {
         String paragraph = paragraphs.get(i);
@@ -90,7 +93,16 @@ public class MainActivity extends AppCompatActivity {
         }
         return newParagraph;
     }
-
+    private String incrementChapterInUrl(String url) {
+        Pattern pattern = Pattern.compile("(\\d+)(?!.*\\d)");
+        Matcher matcher = pattern.matcher(url);
+        if (matcher.find()) {
+            int chapterNumber = Integer.parseInt(matcher.group(1));
+            chapterNumber++;
+            url = matcher.replaceFirst(String.valueOf(chapterNumber));
+        }
+        return url;
+    }
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -99,7 +111,7 @@ public class MainActivity extends AppCompatActivity {
         window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
         window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
         window.setStatusBarColor(ContextCompat.getColor(this, R.color.BLACK));
-
+        ScrollView scrollView = findViewById(R.id.scrollView);
         parentLayout = findViewById(R.id.parentLayout);
         urlInput = findViewById(R.id.urlInput);
         Button scrapButton = findViewById(R.id.scrapButton);
@@ -140,6 +152,17 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
         }
+
+        scrollView.getViewTreeObserver().addOnScrollChangedListener(() -> {
+            if (!scrollView.canScrollVertically(1) && !isLoading) {
+                isLoading = true;
+                String url12 = urlInput.getText().toString();
+                url12 = incrementChapterInUrl(url12);
+                urlInput.setText(url12);
+                new WebScrapingTask().execute(url12);
+                scrollView.fullScroll(ScrollView.FOCUS_UP);
+            }
+        });
 
         scrapButton.setOnClickListener(v -> {
             String url1 = urlInput.getText().toString();
@@ -395,6 +418,7 @@ public class MainActivity extends AppCompatActivity {
                     parentLayout.addView(textView);
                 }
             }
+            new Handler().postDelayed(() -> isLoading = false, 2000); // 2000 milliseconds = 2 seconds
             ScrollView scrollView = findViewById(R.id.scrollView);
             scrollView.fullScroll(ScrollView.FOCUS_UP);
         }
