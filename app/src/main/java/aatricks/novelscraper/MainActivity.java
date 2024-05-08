@@ -38,6 +38,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -123,6 +124,7 @@ public class MainActivity extends AppCompatActivity {
 
         if (!data.isEmpty()) {
             String[] paragraphs = data.split(" ,");
+            if (!url.isEmpty()) {
                 for (String paragraph : paragraphs) {
                     if (paragraph.contains("http")) {
                         StringBuilder newParagraph = new StringBuilder();
@@ -147,10 +149,14 @@ public class MainActivity extends AppCompatActivity {
                         imageView.setLayoutParams(LayoutParams);
                         parentLayout.addView(imageView);
                     } else {
-                        TextView textView = getView(getStringBuilder(Collections.singletonList(paragraph), 0)+"\n");
+                        TextView textView = getView(getStringBuilder(Collections.singletonList(paragraph), 0) + "\n");
                         parentLayout.addView(textView);
                     }
                 }
+            } else {
+                TextView textView = getView(Arrays.toString(paragraphs));
+                parentLayout.addView(textView);
+            }
         }
         Button downloadButton = findViewById(R.id.downloadButton); // replace with your button's ID
         downloadButton.setOnClickListener(v -> {
