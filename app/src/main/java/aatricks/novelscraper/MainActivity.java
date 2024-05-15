@@ -55,6 +55,7 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout parentLayout;
     private EditText urlInput;
     private boolean isLoading = false;
+    private static int pageNumber = 1;
     @NonNull
     private static StringBuilder getStringBuilder(List<String> paragraphs, int i) {
         String paragraph = paragraphs.get(i);
@@ -89,6 +90,18 @@ public class MainActivity extends AppCompatActivity {
                 if (c == '\n') {
                     newParagraph.deleteCharAt(newParagraph.length() - 1);
                     newParagraph.append(" ");
+                }
+                // if c is an integer and corresponds to pageNumber of the 10 next pageNumber, remove it and update pageNumber
+                if (Character.isDigit(c)) {
+                    for (int k = -10; k <= 10; k++) {
+                        String numberToFind = String.valueOf(pageNumber + k);
+                        if (paragraph.substring(j).startsWith(numberToFind)) {
+                            newParagraph.deleteCharAt(newParagraph.length() - 1);
+                            newParagraph.deleteCharAt(newParagraph.length() - 1);
+                            pageNumber += k + 1;
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -277,13 +290,11 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 pdfDoc.close();
-
                 paragraphs.add(text.toString());
                 for (int i = 0; i < paragraphs.size(); i++) {
                     StringBuilder newParagraph = getStringBuilder(paragraphs, i);
                     paragraphs.set(i, newParagraph.toString());
                 }
-
             } catch (IOException e) {
                 e.printStackTrace();
             }
