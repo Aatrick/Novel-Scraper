@@ -59,6 +59,7 @@ public class MainActivity extends AppCompatActivity {
     @NonNull
     private static StringBuilder getStringBuilder(List<String> paragraphs, int i) {
         String paragraph = paragraphs.get(i);
+        paragraph = removePageWord(paragraph);
         StringBuilder newParagraph = new StringBuilder();
         for (int j = 0; j < paragraph.length(); j++) {
             char c = paragraph.charAt(j);
@@ -97,7 +98,10 @@ public class MainActivity extends AppCompatActivity {
                         String numberToFind = String.valueOf(pageNumber + k);
                         if (paragraph.substring(j).startsWith(numberToFind)) {
                             newParagraph.deleteCharAt(newParagraph.length() - 1);
-                            newParagraph.deleteCharAt(newParagraph.length() - 1);
+                            //if the previous character is a space, remove it
+                            if (newParagraph.charAt(newParagraph.length() - 1) == ' ') {
+                                newParagraph.deleteCharAt(newParagraph.length() - 1);
+                            }
                             pageNumber += k + 1;
                             break;
                         }
@@ -106,6 +110,13 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         return newParagraph;
+    }
+
+    private static String removePageWord(String paragraph) {
+        String regex = "(Page \\||Page )";
+        Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(paragraph);
+        return matcher.replaceAll("");
     }
     private String incrementChapterInUrl(String url) {
         Pattern pattern = Pattern.compile("(\\d+)(?!.*\\d)");
