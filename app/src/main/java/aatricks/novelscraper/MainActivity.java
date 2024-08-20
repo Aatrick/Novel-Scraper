@@ -40,7 +40,9 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -56,12 +58,13 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout parentLayout;
     private EditText urlInput;
     private boolean isLoading = false;
-    private static int pageNumber = 1;
+    private static int pageNumber = 0;
     @NonNull
     private static StringBuilder getStringBuilder(List<String> paragraphs, int i) {
         String paragraph = paragraphs.get(i);
         paragraph = removePageWord(paragraph);
         StringBuilder newParagraph = new StringBuilder();
+        Set<Integer> seenNumbers = new HashSet<>();
         for (int j = 0; j < paragraph.length(); j++) {
             char c = paragraph.charAt(j);
             newParagraph.append(c);
@@ -93,20 +96,22 @@ public class MainActivity extends AppCompatActivity {
                     newParagraph.deleteCharAt(newParagraph.length() - 1);
                     newParagraph.append(" ");
                 }
-                // if c is an integer and corresponds to pageNumber of the 10 next pageNumber, remove it and update pageNumber
                 if (Character.isDigit(c)) {
-                    for (int k = -10; k <= 10; k++) {
-                        String numberToFind = String.valueOf(pageNumber + k);
-                        if (paragraph.substring(j).startsWith(numberToFind)) {
+                    int number = Character.getNumericValue(c);
+                    if (number == pageNumber + 1 || number == pageNumber + 2 || number == pageNumber + 3 || number == pageNumber + 4 ) {
+                        if (!seenNumbers.contains(number)) {
                             newParagraph.deleteCharAt(newParagraph.length() - 1);
-                            //if the previous character is a space, remove it
-                            if (newParagraph.charAt(newParagraph.length() - 1) == ' ') {
-                                newParagraph.deleteCharAt(newParagraph.length() - 1);
-                            }
-                            pageNumber += k + 1;
-                            break;
+                            pageNumber = number;
+                            seenNumbers.add(number);
+                        }
+                    } else if (number == pageNumber - 1 || number == pageNumber - 2 || number == pageNumber - 3 || number == pageNumber - 4 ) {
+                        if (!seenNumbers.contains(number)) {
+                            newParagraph.deleteCharAt(newParagraph.length() - 1);
+                            pageNumber = number;
+                            seenNumbers.add(number);
                         }
                     }
+
                 }
             }
         }
