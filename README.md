@@ -4,6 +4,7 @@ Here is a novel reader android app, it’s coded in Java and uses the android st
 - PDF parsing and styling
 - loads next chapter when user reaches the end of the current chapter
 - Download 100 next chapters for offline reading
+- Bionic reading
 
 ### Installation
 
