@@ -8,6 +8,7 @@ Here is a novel reader android app, it’s coded in Java and uses the android st
 
 ### Installation
 
-Simply download and install the release apk named NovelScraper.apk
+Simply download and install the release apk.
 
-![novelscraper](https://github.com/Aatrick/Novel-Scraper/assets/113598245/d9e93362-f422-4fb3-9d60-0090048a6036)
+
+![Screenshot 2024-08-20 213201](https://github.com/user-attachments/assets/b3566735-bc0d-4668-ab08-860381292067)
