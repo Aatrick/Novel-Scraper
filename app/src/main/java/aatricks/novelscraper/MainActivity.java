@@ -51,6 +51,7 @@ import okio.BufferedSink;
 import okio.Okio;
 
 public class MainActivity extends AppCompatActivity {
+    private boolean hasData = false;
     private static final int PICK_HTML_FILE = 1;
     private LinearLayout parentLayout;
     private EditText urlInput;
@@ -192,7 +193,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         scrollView.getViewTreeObserver().addOnScrollChangedListener(() -> {
-            if (!scrollView.canScrollVertically(1) && !isLoading) {
+            if (!scrollView.canScrollVertically(1) && !isLoading && hasData) {
                 isLoading = true;
                 String url12 = urlInput.getText().toString();
                 url12 = incrementChapterInUrl(url12);
@@ -438,6 +439,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         protected void onPostExecute(List<String> paragraphs) {
             parentLayout.removeAllViews();
+            hasData = !paragraphs.isEmpty();
             for (String paragraph : paragraphs) {
                 if (paragraph.contains("http")) {
                     ImageView imageView = new ImageView(MainActivity.this);
