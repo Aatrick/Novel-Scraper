@@ -11,6 +11,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.text.Html;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -250,7 +251,8 @@ public class MainActivity extends AppCompatActivity {
     @NonNull
     private TextView getView(String paragraph) {
         TextView textView = new TextView(MainActivity.this);
-        textView.setText(paragraph);
+        String bionicText = applyBionicReading(paragraph);
+        textView.setText(Html.fromHtml(bionicText, Html.FROM_HTML_MODE_LEGACY));
         textView.setTextSize(20);
         LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -258,7 +260,8 @@ public class MainActivity extends AppCompatActivity {
         );
         layoutParams.setMargins(0, 10, 0, 10);
         textView.setLayoutParams(layoutParams);
-        textView.setLineSpacing(0, 1.5f);
+        textView.setLineSpacing(0, 1.5f); // Line spacing multiplier
+        textView.setPadding(0, 20, 0, 20); // Add padding to create paragraph spacing
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 textView.setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD);
@@ -275,7 +278,19 @@ public class MainActivity extends AppCompatActivity {
         SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putInt("scrollY", scrollY);
+        editor.putString("paragraphs", getParagraphsAsString());
         editor.apply();
+    }
+
+    private String getParagraphsAsString() {
+        StringBuilder paragraphs = new StringBuilder();
+        for (int i = 0; i < parentLayout.getChildCount(); i++) {
+            if (parentLayout.getChildAt(i) instanceof TextView) {
+                TextView textView = (TextView) parentLayout.getChildAt(i);
+                paragraphs.append(textView.getText().toString()).append(" ,");
+            }
+        }
+        return paragraphs.toString();
     }
 
     @Override
@@ -283,6 +298,15 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
         int scrollY = sharedPreferences.getInt("scrollY", 0);
+        String data = sharedPreferences.getString("paragraphs", "");
+        if (!data.isEmpty()) {
+            String[] paragraphs = data.split(" ,");
+            parentLayout.removeAllViews();
+            for (String paragraph : paragraphs) {
+                TextView textView = getView(paragraph);
+                parentLayout.addView(textView);
+            }
+        }
         final ScrollView scrollView = findViewById(R.id.scrollView);
         scrollView.post(() -> scrollView.scrollTo(0, scrollY));
     }
@@ -494,5 +518,19 @@ public class MainActivity extends AppCompatActivity {
 
             return null;
         }
+    }
+    private String applyBionicReading(String text) {
+        StringBuilder bionicText = new StringBuilder();
+        String[] words = text.split("\\s+");
+        for (String word : words) {
+            int splitIndex = (int) Math.ceil(word.length() * 0.4); // Emphasize the first 40% of the word
+            if (splitIndex > 0 && splitIndex < word.length()) {
+                bionicText.append("<b>").append(word.substring(0, splitIndex)).append("</b>")
+                        .append(word.substring(splitIndex)).append(" ");
+            } else {
+                bionicText.append(word).append(" ");
+            }
+        }
+        return bionicText.toString().trim();
     }
 }
