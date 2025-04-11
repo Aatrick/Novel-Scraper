@@ -1,6 +1,9 @@
 <resources>
-    <string name="app_name">NovelScraper</string>
+    <string name="app_name">Novel Scraper</string>
     <string name="enter_url_here">Enter URL here</string>
-    <string name="scrap">Scrap</string>
+    <string name="scrap">+</string>
     <string name="hundred">100</string>
+    <string name="library">Library</string>
+    <string name="delete_selected">Delete Selected</string>
+    <string name="cancel">Cancel</string>
 </resources>
