@@ -65,7 +65,7 @@ import okhttp3.Response;
 import okio.BufferedSink;
 import okio.Okio;
 
-public class MainActivity extends AppCompatActivity implements LibraryAdapter.OnItemClickListener, LibraryAdapter.OnItemLongClickListener {
+public class MainActivity extends AppCompatActivity implements LibraryAdapter.OnItemClickListener, LibraryAdapter.OnItemLongClickListener, LibraryAdapter.OnSelectionChangeListener {
     private boolean hasData = false;
     private static final int PICK_HTML_FILE = 1;
     private LinearLayout parentLayout;
@@ -78,7 +78,6 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     private List<LibraryItem> libraryItems = new ArrayList<>();
     private boolean selectionMode = false;
     private Button deleteSelectedButton;
-    private Button cancelSelectionButton;
     private GestureDetectorCompat gestureDetector;
 
     @NonNull
@@ -186,7 +185,6 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         Button scrapButton = findViewById(R.id.scrapButton);
         Button downloadButton = findViewById(R.id.downloadButton);
         deleteSelectedButton = findViewById(R.id.deleteSelectedButton);
-        cancelSelectionButton = findViewById(R.id.cancelSelectionButton);
 
         // Setup gesture detector for swipes
         gestureDetector = new GestureDetectorCompat(this, new SwipeGestureListener());
@@ -200,7 +198,7 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         });
 
         // Setup RecyclerView for library items
-        libraryAdapter = new LibraryAdapter(this, this);
+        libraryAdapter = new LibraryAdapter(this, this, this);
         libraryRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         libraryRecyclerView.setAdapter(libraryAdapter);
         libraryRecyclerView.addItemDecoration(new DividerItemDecoration(this, DividerItemDecoration.VERTICAL));
@@ -263,13 +261,11 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             return handled;
         });
 
-        // Setup buttons for selection mode
+        // Setup delete button
         deleteSelectedButton.setOnClickListener(v -> {
             deleteSelectedItems();
             exitSelectionMode();
         });
-
-        cancelSelectionButton.setOnClickListener(v -> exitSelectionMode());
 
         SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
         String url = sharedPreferences.getString("url", "");
@@ -317,6 +313,17 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                 drawerLayout.closeDrawers();
             }
         });
+    }
+
+    @Override
+    public void onSelectionChanged(int selectedCount) {
+        if (selectedCount > 0) {
+            deleteSelectedButton.setVisibility(View.VISIBLE);
+            selectionMode = true;
+        } else {
+            deleteSelectedButton.setVisibility(View.GONE);
+            selectionMode = false;
+        }
     }
 
     private void loadExistingContent(String data, String url) {
@@ -432,15 +439,21 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         selectionMode = false;
         libraryAdapter.setSelectionMode(false);
         libraryAdapter.clearSelections();
-        deleteSelectedButton.setVisibility(Button.GONE);
-        cancelSelectionButton.setVisibility(Button.GONE);
+        deleteSelectedButton.setVisibility(View.GONE);
     }
 
     @Override
     public void onItemClick(LibraryItem item) {
-        urlInput.setText(item.getUrl());
-        loadItemContent(item);
-        drawerLayout.closeDrawers();
+        if (selectionMode) {
+            // In selection mode, clicking toggles selection
+            item.setSelected(!item.isSelected());
+            libraryAdapter.notifySelectionChanged();
+        } else {
+            // Normal mode, load content
+            urlInput.setText(item.getUrl());
+            loadItemContent(item);
+            drawerLayout.closeDrawers();
+        }
     }
 
     @Override
@@ -449,9 +462,7 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             selectionMode = true;
             libraryAdapter.setSelectionMode(true);
             item.setSelected(true);
-            libraryAdapter.notifyDataSetChanged();
-            deleteSelectedButton.setVisibility(Button.VISIBLE);
-            cancelSelectionButton.setVisibility(Button.VISIBLE);
+            libraryAdapter.notifySelectionChanged();
         }
     }
 

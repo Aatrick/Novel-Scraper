@@ -26,6 +26,7 @@ public class LibraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
     private final OnItemClickListener listener;
     private final OnItemLongClickListener longClickListener;
+    private final OnSelectionChangeListener selectionChangeListener;
 
     public interface OnItemClickListener {
         void onItemClick(LibraryItem item);
@@ -35,9 +36,14 @@ public class LibraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         void onItemLongClick(LibraryItem item);
     }
 
-    public LibraryAdapter(OnItemClickListener listener, OnItemLongClickListener longClickListener) {
+    public interface OnSelectionChangeListener {
+        void onSelectionChanged(int selectedCount);
+    }
+
+    public LibraryAdapter(OnItemClickListener listener, OnItemLongClickListener longClickListener, OnSelectionChangeListener selectionChangeListener) {
         this.listener = listener;
         this.longClickListener = longClickListener;
+        this.selectionChangeListener = selectionChangeListener;
     }
 
     public void setData(List<LibraryItem> libraryItems) {
@@ -146,6 +152,7 @@ public class LibraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 if (selectionMode) {
                     item.setSelected(!item.isSelected());
                     notifyItemChanged(holder.getAdapterPosition());
+                    notifySelectionChanged();
                 } else {
                     listener.onItemClick(item);
                 }
@@ -227,12 +234,31 @@ public class LibraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     }
 
     public void clearSelections() {
+        boolean hadSelections = false;
         for (Object obj : items) {
             if (obj instanceof LibraryItem) {
-                ((LibraryItem) obj).setSelected(false);
+                LibraryItem item = (LibraryItem) obj;
+                if (item.isSelected()) {
+                    hadSelections = true;
+                    item.setSelected(false);
+                }
             }
         }
-        notifyDataSetChanged();
+
+        if (hadSelections) {
+            notifyDataSetChanged();
+            notifySelectionChanged();
+        }
+    }
+
+    public void notifySelectionChanged() {
+        int selectedCount = 0;
+        for (Object obj : items) {
+            if (obj instanceof LibraryItem && ((LibraryItem) obj).isSelected()) {
+                selectedCount++;
+            }
+        }
+        selectionChangeListener.onSelectionChanged(selectedCount);
     }
 
     static class HeaderViewHolder extends RecyclerView.ViewHolder {
