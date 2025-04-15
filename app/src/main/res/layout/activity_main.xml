@@ -6,6 +6,7 @@
     android:id="@+id/drawerLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
     tools:context=".MainActivity">
 
     <!-- Main content -->
@@ -23,6 +24,8 @@
             android:scrollbars="vertical"
             android:scrollbarSize="10dp"
             android:scrollbarThumbVertical="@color/darkgrey"
+            android:fadeScrollbars="false"
+            android:requiresFadingEdge="vertical"
             tools:ignore="SpeakableTextPresentCheck">
 
             <LinearLayout

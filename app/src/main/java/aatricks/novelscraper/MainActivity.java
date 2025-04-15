@@ -14,6 +14,7 @@ import android.os.Handler;
 import android.text.Html;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
+import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -166,6 +167,7 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         return url;
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -189,6 +191,14 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         // Setup gesture detector for swipes
         gestureDetector = new GestureDetectorCompat(this, new SwipeGestureListener());
 
+        // Configure drawer to work with ScrollView properly
+        drawerLayout.addDrawerListener(new DrawerLayout.SimpleDrawerListener() {
+            @Override
+            public void onDrawerSlide(View drawerView, float slideOffset) {
+                // No need to disable ScrollView - let it function normally
+            }
+        });
+
         // Setup RecyclerView for library items
         libraryAdapter = new LibraryAdapter(this, this);
         libraryRecyclerView.setLayoutManager(new LinearLayoutManager(this));
@@ -198,14 +208,52 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         // Load library data
         loadLibraryData();
 
-        // Setup touch listeners for swipe gestures - improved implementation
-        findViewById(R.id.mainContent).setOnTouchListener((v, event) -> {
-            boolean handled = gestureDetector.onTouchEvent(event);
-            if (event.getAction() == MotionEvent.ACTION_UP) {
-                v.performClick();
+        // Ensure the DrawerLayout is above the ScrollView in z-order
+        drawerLayout.bringToFront();
+        drawerLayout.requestLayout();
+
+        // Setup touch listeners with improved handling
+        scrollView.setOnTouchListener(new View.OnTouchListener() {
+            private float startX = 0;
+            private static final int EDGE_THRESHOLD = 50; // dp
+            private final float density = getResources().getDisplayMetrics().density;
+            private final int edgeThresholdPx = (int) (EDGE_THRESHOLD * density);
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        // Store initial touch position
+                        startX = event.getX();
+                        // Let ScrollView handle down event for scrolling
+                        v.onTouchEvent(event);
+                        break;
+                    case MotionEvent.ACTION_MOVE:
+                        // Handle horizontal swipes near edge for drawer
+                        if (startX < edgeThresholdPx && event.getX() > startX + edgeThresholdPx) {
+                            // Right swipe from left edge - open drawer
+                            drawerLayout.openDrawer(findViewById(R.id.navDrawer));
+                            return true;
+                        }
+                        // Let ScrollView handle move event
+                        v.onTouchEvent(event);
+                        break;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        // Let ScrollView handle up/cancel event to stop scrolling
+                        v.onTouchEvent(event);
+                        v.performClick();
+                        break;
+                }
+                // Return true to indicate we've handled the event
+                return true;
             }
-            return handled;
         });
+
+        // Simplify gesture detection for mainContent
+        findViewById(R.id.mainContent).setOnTouchListener((v, event) ->
+            gestureDetector.onTouchEvent(event)
+        );
 
         findViewById(R.id.navDrawer).setOnTouchListener((v, event) -> {
             boolean handled = gestureDetector.onTouchEvent(event);
@@ -299,7 +347,6 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                                 LinearLayout.LayoutParams.WRAP_CONTENT,
                                 LinearLayout.LayoutParams.WRAP_CONTENT
                         );
-                        LayoutParams.setMargins(0, 10, 0, 10);
                         imageView.setLayoutParams(LayoutParams);
                         parentLayout.addView(imageView);
                     } else if (paragraph != null) {
@@ -487,8 +534,9 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     private TextView getView(String paragraph) {
         TextView textView = new TextView(MainActivity.this);
         if (paragraph != null) {
-            String bionicText = applyBionicReading(paragraph);
-            textView.setText(Html.fromHtml(bionicText, Html.FROM_HTML_MODE_LEGACY));
+//            String bionicText = applyBionicReading(paragraph);
+//            textView.setText(Html.fromHtml(bionicText, Html.FROM_HTML_MODE_LEGACY));
+            textView.setText(Html.fromHtml(paragraph, Html.FROM_HTML_MODE_LEGACY));
         } else {
             textView.setText("");
         }
@@ -497,7 +545,6 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
         );
-        layoutParams.setMargins(0, 10, 0, 10);
         textView.setLayoutParams(layoutParams);
         textView.setLineSpacing(0, 1.5f); // Line spacing multiplier
         textView.setPadding(0, 20, 0, 20); // Add padding to create paragraph spacing
@@ -555,40 +602,41 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     private class SwipeGestureListener extends GestureDetector.SimpleOnGestureListener {
         private static final int SWIPE_THRESHOLD = 100;
         private static final int SWIPE_VELOCITY_THRESHOLD = 100;
+        private static final int EDGE_SIZE = 50; // Edge size in pixels for drawer activation
 
         @Override
         public boolean onDown(@NonNull MotionEvent e) {
-            // Return true to ensure onFling will be called
-            return true;
+            // Only return true to indicate we're interested in subsequent events
+            return false;
         }
 
         @Override
         public boolean onFling(@NonNull MotionEvent e1, @NonNull MotionEvent e2, float velocityX, float velocityY) {
+            boolean result = false;
+            try {
+                float diffX = e2.getX() - e1.getX();
+                float diffY = e2.getY() - e1.getY();
+                float startX = e1.getX();
+                boolean isNearLeftEdge = startX < EDGE_SIZE * getResources().getDisplayMetrics().density;
 
-            float diffX = e2.getX() - e1.getX();
-            float diffY = e2.getY() - e1.getY();
-            
-            // Check if swipe is more horizontal than vertical
-            if (Math.abs(diffX) > Math.abs(diffY)) {
-                // Check if swipe meets threshold and velocity requirements
-                if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
-                    if (diffX > 0 ) {
-                        // Right swipe
-                        if (!drawerLayout.isDrawerOpen(findViewById(R.id.navDrawer))) {
+                // Only handle drawer opening from left edge
+                if (Math.abs(diffX) > Math.abs(diffY)) {
+                    if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
+                        if (diffX > 0 && isNearLeftEdge) {
+                            // Right swipe from left edge - open drawer
                             drawerLayout.openDrawer(findViewById(R.id.navDrawer));
-                            return true;
-                        }
-                    } else if (diffX < 0) {
-                        // Left swipe - close drawer if open
-                        if (drawerLayout.isDrawerOpen(findViewById(R.id.navDrawer))) {
+                            result = true;
+                        } else if (diffX < 0 && drawerLayout.isDrawerOpen(findViewById(R.id.navDrawer))) {
+                            // Left swipe - close drawer if open
                             drawerLayout.closeDrawers();
-                            return true;
+                            result = true;
                         }
                     }
                 }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-            
-            return false;
+            return result;
         }
     }
 
@@ -700,7 +748,6 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                                 LinearLayout.LayoutParams.WRAP_CONTENT,
                                 LinearLayout.LayoutParams.WRAP_CONTENT
                         );
-                        LayoutParams.setMargins(0, 10, 0, 10);
                         imageView.setLayoutParams(LayoutParams);
                         parentLayout.addView(imageView);
                     } else if (paragraph != null) {
@@ -760,6 +807,7 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                 Document document = Jsoup.parse(htmlFile, "UTF-8");
 
                 // Try to extract title
+                // TODO: fix title parsing not taking only essential info
                 String title = document.title();
                 if (title.isEmpty()) {
                     Element titleElement = document.selectFirst("h1");
@@ -780,6 +828,7 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                         if (!paragraph.isEmpty()) {
                             StringBuilder styledParagraph = getStringBuilder(Collections.singletonList(paragraph), 0);
                             paragraphs.add(styledParagraph.toString());
+                            paragraphs.add("\n\n\n\n");
                         }
                     } else if (element.tagName().equals("img")) {
                         String imgSrc = element.attr("src");
@@ -826,7 +875,6 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                                 LinearLayout.LayoutParams.WRAP_CONTENT,
                                 LinearLayout.LayoutParams.WRAP_CONTENT
                         );
-                        LayoutParams.setMargins(0, 10, 0, 10);
                         imageView.setLayoutParams(LayoutParams);
                         parentLayout.addView(imageView);
                     } else if (paragraph != null) {
@@ -847,6 +895,7 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
 
     @SuppressLint("StaticFieldLeak")
     private class ScrapInAdvance extends AsyncTask<String, Void, Void> {
+        //TODO: fix auto scrolling to the top of the page when loading new chapter
         @Override
         protected Void doInBackground(String... strings) {
             String url = strings[0];
@@ -904,4 +953,3 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         return bionicText.toString().trim();
     }
 }
-
