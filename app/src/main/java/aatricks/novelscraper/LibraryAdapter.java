@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 public class LibraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     private static final int TYPE_HEADER = 0;
@@ -42,10 +44,7 @@ public class LibraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         // Group items by title
         groupedItems.clear();
         for (LibraryItem item : libraryItems) {
-            String title = item.getTitle();
-            if (title == null || title.isEmpty()) {
-                title = "Unknown";
-            }
+            String title = extractGroupTitle(item);
 
             if (!groupedItems.containsKey(title)) {
                 groupedItems.put(title, new ArrayList<>());
@@ -61,6 +60,51 @@ public class LibraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         }
 
         notifyDataSetChanged();
+    }
+
+    /**
+     * Extracts a grouping title from the URL's second path segment
+     * For web URLs like https://website/title/chapter, it will use "title"
+     * For file URLs, it will use the filename or "Unknown"
+     */
+    private String extractGroupTitle(LibraryItem item) {
+        String url = item.getUrl();
+        if (url == null || url.isEmpty()) {
+            return "Unknown";
+        }
+
+        try {
+            if (url.startsWith("http://") || url.startsWith("https://")) {
+                URI uri = new URI(url);
+                String path = uri.getPath();
+
+                if (path != null && !path.isEmpty()) {
+                    String[] segments = path.split("/");
+                    // Look for the second path segment (index 1) if it exists
+                    if (segments.length > 1 && !segments[1].isEmpty()) {
+                        return segments[1];
+                    }
+                }
+
+                // Fallback to host if no second path segment
+                String host = uri.getHost();
+                return host != null ? host : "Unknown";
+            } else {
+                // For file URIs or non-URL strings, extract filename
+                String filename = url;
+                if (filename.contains("/")) {
+                    filename = filename.substring(filename.lastIndexOf('/') + 1);
+                }
+                if (filename.contains(".")) {
+                    filename = filename.substring(0, filename.lastIndexOf('.'));
+                }
+                return filename.isEmpty() ? "Unknown" : filename;
+            }
+        } catch (URISyntaxException e) {
+            // If URL parsing fails, use the custom title or a fallback
+            return item.getTitle() != null && !item.getTitle().isEmpty() ?
+                   item.getTitle() : "Unsorted";
+        }
     }
 
     @NonNull
@@ -86,12 +130,9 @@ public class LibraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         } else if (holder instanceof ItemViewHolder) {
             ItemViewHolder itemHolder = (ItemViewHolder) holder;
             LibraryItem item = (LibraryItem) items.get(position);
-            String displayTitle = item.getUrl();
-            // Extract host name or file name for display
-            if (displayTitle.contains("/")) {
-                displayTitle = displayTitle.substring(displayTitle.lastIndexOf('/') + 1);
-            }
 
+            // Display the last part of the URL (chapter identifier or filename)
+            String displayTitle = extractDisplayTitle(item.getUrl());
             itemHolder.itemTitle.setText(displayTitle);
 
             if (selectionMode) {
@@ -114,6 +155,46 @@ public class LibraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 longClickListener.onItemLongClick(item);
                 return true;
             });
+        }
+    }
+
+    /**
+     * Extracts a display title from a URL
+     * For web URLs, it tries to get the last meaningful path segment
+     * For files, it gets the filename
+     */
+    private String extractDisplayTitle(String url) {
+        if (url == null || url.isEmpty()) {
+            return "Unknown";
+        }
+
+        try {
+            if (url.startsWith("http://") || url.startsWith("https://")) {
+                URI uri = new URI(url);
+                String path = uri.getPath();
+
+                if (path != null && !path.isEmpty()) {
+                    // Split path and take the last non-empty segment
+                    String[] segments = path.split("/");
+                    for (int i = segments.length - 1; i >= 0; i--) {
+                        if (!segments[i].isEmpty()) {
+                            return segments[i];
+                        }
+                    }
+                }
+
+                // Fallback to full url if no path segments found
+                return url;
+            } else {
+                // For file URIs, extract filename
+                if (url.contains("/")) {
+                    return url.substring(url.lastIndexOf('/') + 1);
+                }
+                return url;
+            }
+        } catch (URISyntaxException e) {
+            // If URL parsing fails, return the raw URL
+            return url;
         }
     }
 

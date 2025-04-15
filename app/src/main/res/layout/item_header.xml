@@ -3,8 +3,9 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:paddingTop="10dp"
-    android:paddingBottom="5dp">
+    android:paddingTop="8dp"
+    android:paddingBottom="4dp"
+    android:background="#1A1A1A">
 
     <TextView
         android:id="@+id/headerTitle"
@@ -12,12 +13,15 @@
         android:layout_height="wrap_content"
         android:textSize="16sp"
         android:textStyle="bold"
-        android:textColor="#FFFFFF"
-        android:fontFamily="sans-serif-medium"/>
+        android:textColor="#CCCCCC"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"/>
 
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:layout_marginTop="3dp"
-        android:background="#333333"/>
+        android:background="#333333"
+        android:layout_marginTop="4dp"/>
 </LinearLayout>

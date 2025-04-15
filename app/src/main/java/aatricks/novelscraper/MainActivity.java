@@ -807,7 +807,6 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                 Document document = Jsoup.parse(htmlFile, "UTF-8");
 
                 // Try to extract title
-                // TODO: fix title parsing not taking only essential info
                 String title = document.title();
                 if (title.isEmpty()) {
                     Element titleElement = document.selectFirst("h1");
@@ -895,7 +894,6 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
 
     @SuppressLint("StaticFieldLeak")
     private class ScrapInAdvance extends AsyncTask<String, Void, Void> {
-        //TODO: fix auto scrolling to the top of the page when loading new chapter
         @Override
         protected Void doInBackground(String... strings) {
             String url = strings[0];
