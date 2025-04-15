@@ -80,6 +80,13 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     private Button deleteSelectedButton;
     private GestureDetectorCompat gestureDetector;
 
+    // Variables for half-screen scroll security
+    private boolean isBottomReached = false;
+    private float QuarterScreenHeight;
+    private float initialTouchY;
+    private float totalScrollDistance = 0;
+    private boolean securityScrollEnabled = false;
+
     @NonNull
     private static StringBuilder getStringBuilder(List<String> paragraphs, int i) {
         if (paragraphs == null || i < 0 || i >= paragraphs.size() || paragraphs.get(i) == null) {
@@ -289,18 +296,51 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             }
         });
 
+        // Calculate quarter screen height for security scroll feature
+        QuarterScreenHeight = getResources().getDisplayMetrics().heightPixels / 4.0f;
+
+        // Setup scroll security mechanism
+        scrollView.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    initialTouchY = event.getY();
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    if (isBottomReached && securityScrollEnabled) {
+                        // Track scroll distance when security scroll is active
+                        float currentY = event.getY();
+                        totalScrollDistance += (initialTouchY - currentY);
+                        initialTouchY = currentY;
+
+                        // Check if user has scrolled half the screen height
+                        if (totalScrollDistance >= QuarterScreenHeight) {
+                            // Trigger loading next chapter
+                            loadNextChapter();
+                            resetScrollSecurity();
+                        }
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    if (isBottomReached && !securityScrollEnabled) {
+                        // First time reaching bottom, enable security
+                        securityScrollEnabled = true;
+                        totalScrollDistance = 0;
+                    }
+                    break;
+            }
+
+            // Let the ScrollView handle the event
+            return v.onTouchEvent(event);
+        });
+
         scrollView.getViewTreeObserver().addOnScrollChangedListener(() -> {
             if (!scrollView.canScrollVertically(1) && !isLoading && hasData) {
-                isLoading = true;
-                String url12 = urlInput.getText().toString();
-                if (!url12.isEmpty()) {
-                    url12 = incrementChapterInUrl(url12);
-                    urlInput.setText(url12);
-                    new WebScrapingTask().execute(url12);
-                    scrollView.fullScroll(ScrollView.FOCUS_UP);
-                } else {
-                    isLoading = false;
-                }
+                // Reached bottom, activate security scroll
+                isBottomReached = true;
+            } else if (scrollView.canScrollVertically(1)) {
+                // Not at bottom anymore, reset security
+                resetScrollSecurity();
             }
         });
 
@@ -702,11 +742,6 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                 TextView textView = getView(paragraphs.get(0));
                 parentLayout.addView(textView);
             }
-            ScrollView scrollView = findViewById(R.id.scrollView);
-            scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_UP));
-
-            // Add to library if not already present
-            addToLibrary(fileUri.toString(), getFileName(fileUri), "pdf");
         }
     }
 
@@ -960,5 +995,38 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             }
         }
         return bionicText.toString().trim();
+    }
+
+    /**
+     * Reset the scroll security mechanism
+     */
+    private void resetScrollSecurity() {
+        isBottomReached = false;
+        securityScrollEnabled = false;
+        totalScrollDistance = 0;
+    }
+
+    /**
+     * Load next chapter when scroll security check passes
+     */
+    private void loadNextChapter() {
+        isLoading = true;
+        String url = urlInput.getText().toString();
+        if (!url.isEmpty()) {
+            url = incrementChapterInUrl(url);
+            urlInput.setText(url);
+
+            // Save current content before loading new chapter
+            SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
+            SharedPreferences.Editor myEdit = sharedPreferences.edit();
+            myEdit.putString("url", url);
+            myEdit.apply();
+
+            new WebScrapingTask().execute(url);
+            ScrollView scrollView = findViewById(R.id.scrollView);
+            scrollView.fullScroll(ScrollView.FOCUS_UP);
+        } else {
+            isLoading = false;
+        }
     }
 }
