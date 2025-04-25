@@ -4,6 +4,7 @@ import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -141,6 +142,14 @@ public class LibraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             String displayTitle = extractDisplayTitle(item.getUrl());
             itemHolder.itemTitle.setText(displayTitle);
 
+            // Show progress
+            itemHolder.itemProgress.setProgress(item.getProgress());
+            itemHolder.progressText.setText(item.getProgress() + "%");
+
+            // Show current chapter indicator
+            itemHolder.currentChapterIndicator.setVisibility(
+                    item.isCurrentlyReading() ? View.VISIBLE : View.INVISIBLE);
+
             if (selectionMode) {
                 itemHolder.itemView.setBackgroundResource(
                         item.isSelected() ? R.color.selectedItem : android.R.color.transparent);
@@ -261,6 +270,66 @@ public class LibraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         selectionChangeListener.onSelectionChanged(selectedCount);
     }
 
+    /**
+     * Updates the currently reading status across all items
+     * @param currentUrl URL of the currently reading chapter
+     */
+    public void updateCurrentlyReading(String currentUrl) {
+        boolean changed = false;
+
+        // Reset all items first
+        for (Object obj : items) {
+            if (obj instanceof LibraryItem) {
+                LibraryItem item = (LibraryItem) obj;
+                if (item.isCurrentlyReading()) {
+                    item.setCurrentlyReading(false);
+                    changed = true;
+                }
+            }
+        }
+
+        // Set the current one
+        if (currentUrl != null && !currentUrl.isEmpty()) {
+            for (Object obj : items) {
+                if (obj instanceof LibraryItem) {
+                    LibraryItem item = (LibraryItem) obj;
+                    if (item.getUrl().equals(currentUrl)) {
+                        item.setCurrentlyReading(true);
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        if (changed) {
+            notifyDataSetChanged();
+        }
+    }
+
+    /**
+     * Updates reading progress for a specific item
+     * @param url URL of the item to update
+     * @param progress Progress percentage (0-100)
+     * @return true if an item was updated, false otherwise
+     */
+    public boolean updateReadingProgress(String url, int progress) {
+        boolean updated = false;
+        for (Object obj : items) {
+            if (obj instanceof LibraryItem) {
+                LibraryItem item = (LibraryItem) obj;
+                if (item.getUrl().equals(url)) {
+                    item.setProgress(progress);
+                    updated = true;
+                }
+            }
+        }
+
+        if (updated) {
+            notifyDataSetChanged();
+        }
+        return updated;
+    }
+
     static class HeaderViewHolder extends RecyclerView.ViewHolder {
         TextView headerTitle;
 
@@ -272,10 +341,16 @@ public class LibraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
     static class ItemViewHolder extends RecyclerView.ViewHolder {
         TextView itemTitle;
+        ProgressBar itemProgress;
+        TextView progressText;
+        View currentChapterIndicator;
 
         ItemViewHolder(@NonNull View itemView) {
             super(itemView);
             itemTitle = itemView.findViewById(R.id.itemTitle);
+            itemProgress = itemView.findViewById(R.id.itemProgress);
+            progressText = itemView.findViewById(R.id.progressText);
+            currentChapterIndicator = itemView.findViewById(R.id.currentChapterIndicator);
         }
     }
 }

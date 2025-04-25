@@ -87,6 +87,11 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     private float totalScrollDistance = 0;
     private boolean securityScrollEnabled = false;
 
+    private String currentUrl = "";
+    private boolean isAtTop = false;
+    private boolean isScrollingUp = false;
+    private String previousChapterUrl = "";
+
     @NonNull
     private static StringBuilder getStringBuilder(List<String> paragraphs, int i) {
         if (paragraphs == null || i < 0 || i >= paragraphs.size() || paragraphs.get(i) == null) {
@@ -97,51 +102,56 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         paragraph = removePageWord(paragraph);
         StringBuilder newParagraph = new StringBuilder();
         Set<Integer> seenNumbers = new HashSet<>();
+
         for (int j = 0; j < paragraph.length(); j++) {
             char c = paragraph.charAt(j);
             newParagraph.append(c);
+
             if (j > 1) {
                 char prevChar = paragraph.charAt(j - 1);
                 char prevPrevChar = paragraph.charAt(j - 2);
-                if (c==',' && prevChar=='.') {
+
+                // Handle punctuation combinations
+                if (c == ',' && (prevChar == '.' || prevChar == '"')) {
                     newParagraph.deleteCharAt(newParagraph.length() - 1);
                 }
-                if (c==',' && prevChar=='"') {
-                    newParagraph.deleteCharAt(newParagraph.length() - 1);
-                }
-                if (c == '\n' && prevChar == '.') {
-                    newParagraph.append("\n\n\n");
-                }
-                if (c == '\n' && prevChar == '"') {
-                    newParagraph.append("\n\n\n");
-                }
-                if (c == '\n' && prevPrevChar == '.') {
-                    newParagraph.append("\n\n\n");
-                }
-                if (c == '\n' && prevPrevChar == '"') {
-                    newParagraph.append("\n\n\n");
-                }
-                if (c == '\n' && prevChar == ' ') {
-                    newParagraph.deleteCharAt(newParagraph.length() - 1);
-                }
+
+                // Handle newlines
                 if (c == '\n') {
+                    // Add paragraph breaks after sentences
+                    if (prevChar == '.' || prevChar == '"' ||
+                        prevPrevChar == '.' || prevPrevChar == '"') {
+                        newParagraph.append("\n\n\n");
+                    }
+
+                    // Remove space before newline
+                    if (prevChar == ' ') {
+                        newParagraph.deleteCharAt(newParagraph.length() - 2);
+                    }
+
+                    // Convert single newlines to spaces for better flow
                     newParagraph.deleteCharAt(newParagraph.length() - 1);
                     newParagraph.append(" ");
                 }
+
+                // Handle potential page numbers
                 if (Character.isDigit(c)) {
                     int number = Character.getNumericValue(c);
-                    if (number == pageNumber + 1 || number == pageNumber + 2 || number == pageNumber + 3 || number == pageNumber + 4 ) {
-                        if (!seenNumbers.contains(number)) {
-                            newParagraph.deleteCharAt(newParagraph.length() - 1);
-                            pageNumber = number;
-                            seenNumbers.add(number);
+                    boolean isPossiblePageNumber = false;
+
+                    // Check if this could be a page number (standalone digit or at end of line)
+                    if ((j == paragraph.length() - 1 || !Character.isDigit(paragraph.charAt(j + 1))) && !Character.isDigit(paragraph.charAt(j - 1))) {
+
+                        // Check if number is in sequence with current page
+                        if (Math.abs(number - pageNumber) <= 4 && number != pageNumber) {
+                            isPossiblePageNumber = true;
                         }
-                    } else if (number == pageNumber - 1 || number == pageNumber - 2 || number == pageNumber - 3 || number == pageNumber - 4 ) {
-                        if (!seenNumbers.contains(number)) {
-                            newParagraph.deleteCharAt(newParagraph.length() - 1);
-                            pageNumber = number;
-                            seenNumbers.add(number);
-                        }
+                    }
+
+                    if (isPossiblePageNumber && !seenNumbers.contains(number)) {
+                        newParagraph.deleteCharAt(newParagraph.length() - 1);
+                        pageNumber = number;
+                        seenNumbers.add(number);
                     }
                 }
             }
@@ -201,6 +211,12 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             @Override
             public void onDrawerSlide(View drawerView, float slideOffset) {
                 // No need to disable ScrollView - let it function normally
+            }
+
+            @Override
+            public void onDrawerOpened(View drawerView) {
+                // Save reading progress when drawer is opened
+                updateReadingProgress(findViewById(R.id.scrollView).getScrollY());
             }
         });
 
@@ -279,6 +295,12 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         String data = sharedPreferences.getString("paragraphs", "");
         urlInput.setText(url);
 
+        // Set current URL
+        if (!url.isEmpty()) {
+            currentUrl = url;
+            libraryAdapter.updateCurrentlyReading(url);
+        }
+
         // Check if reader is empty and open drawer if necessary
         if (data.isEmpty()) {
             drawerLayout.openDrawer(findViewById(R.id.navDrawer));
@@ -302,32 +324,45 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         // Setup scroll security mechanism
         scrollView.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
-                case MotionEvent.ACTION_DOWN:
-                    initialTouchY = event.getY();
-                    break;
-                case MotionEvent.ACTION_MOVE:
-                    if (isBottomReached && securityScrollEnabled) {
-                        // Track scroll distance when security scroll is active
-                        float currentY = event.getY();
-                        totalScrollDistance += (initialTouchY - currentY);
-                        initialTouchY = currentY;
+            case MotionEvent.ACTION_DOWN:
+                initialTouchY = event.getY();
+                break;
+            case MotionEvent.ACTION_MOVE:
+                float currentY = event.getY();
+                float deltaY = initialTouchY - currentY;
 
-                        // Check if user has scrolled half the screen height
-                        if (totalScrollDistance >= QuarterScreenHeight) {
-                            // Trigger loading next chapter
-                            loadNextChapter();
-                            resetScrollSecurity();
-                        }
-                    }
-                    break;
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
-                    if (isBottomReached && !securityScrollEnabled) {
-                        // First time reaching bottom, enable security
-                        securityScrollEnabled = true;
-                        totalScrollDistance = 0;
-                    }
-                    break;
+                if (isBottomReached && securityScrollEnabled) {
+                // Track scroll distance when bottom security scroll is active
+                totalScrollDistance += Math.abs(deltaY);
+                initialTouchY = currentY;
+
+                // Check if user has scrolled quarter screen height
+                if (totalScrollDistance >= QuarterScreenHeight) {
+                    // Trigger loading next chapter
+                    loadNextChapter();
+                    resetScrollSecurity();
+                }
+                } else if (isAtTop && deltaY < 0 && securityScrollEnabled) {
+                // Track upward scroll distance when at top
+                totalScrollDistance += Math.abs(deltaY);
+                initialTouchY = currentY;
+
+                // Check if user has scrolled quarter screen height upward
+                if (totalScrollDistance >= QuarterScreenHeight) {
+                    // Trigger loading previous chapter
+                    loadPreviousChapter();
+                    resetScrollSecurity();
+                }
+                }
+                break;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                if ((isBottomReached || isAtTop) && !securityScrollEnabled) {
+                // First time reaching edge, enable security
+                securityScrollEnabled = true;
+                totalScrollDistance = 0;
+                }
+                break;
             }
 
             // Let the ScrollView handle the event
@@ -336,11 +371,16 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
 
         scrollView.getViewTreeObserver().addOnScrollChangedListener(() -> {
             if (!scrollView.canScrollVertically(1) && !isLoading && hasData) {
-                // Reached bottom, activate security scroll
-                isBottomReached = true;
-            } else if (scrollView.canScrollVertically(1)) {
-                // Not at bottom anymore, reset security
-                resetScrollSecurity();
+            // Reached bottom, activate security scroll
+            isBottomReached = true;
+            isAtTop = false;
+            } else if (!scrollView.canScrollVertically(-1) && !isLoading && hasData) {
+            // Reached top, activate security scroll
+            isAtTop = true;
+            isBottomReached = false;
+            } else {
+            // Not at edges anymore, reset security
+            resetScrollSecurity();
             }
         });
 
@@ -470,9 +510,36 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             return;
         }
 
+        // Check if currently reading chapter is being deleted
+        boolean deletingCurrentChapter = false;
+        for (LibraryItem item : selectedItems) {
+            if (item.getUrl().equals(currentUrl)) {
+                deletingCurrentChapter = true;
+                break;
+            }
+        }
+
+        // Remove items from library
         libraryItems.removeAll(selectedItems);
         libraryAdapter.setData(libraryItems);
         saveLibraryData();
+
+        // If currently reading chapter was deleted, clear the reader
+        if (deletingCurrentChapter) {
+            parentLayout.removeAllViews();
+            hasData = false;
+            currentUrl = "";
+
+            // Clear stored paragraph data
+            SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putString("paragraphs", "");
+            editor.putString("url", "");
+            editor.apply();
+
+            // Update UI
+            urlInput.setText("");
+        }
     }
 
     private void exitSelectionMode() {
@@ -489,9 +556,15 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             item.setSelected(!item.isSelected());
             libraryAdapter.notifySelectionChanged();
         } else {
+            // Save progress in current chapter before loading new one
+            updateReadingProgress(findViewById(R.id.scrollView).getScrollY());
+            saveLibraryData();
+
             // Normal mode, load content
             urlInput.setText(item.getUrl());
+            currentUrl = item.getUrl();
             loadItemContent(item);
+            libraryAdapter.updateCurrentlyReading(currentUrl);
             drawerLayout.closeDrawers();
         }
     }
@@ -512,18 +585,25 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             return;
         }
 
+        // Update currently reading status
+        libraryAdapter.updateCurrentlyReading(url);
+        currentUrl = url;
+
+        // Save item's progress for later scrolling
+        final int savedProgress = item.getProgress();
+
         switch (item.getType()) {
             case "web":
-                new WebScrapingTask().execute(url);
+                new WebScrapingTask(false, savedProgress).execute(url);
                 break;
             case "pdf": {
                 Uri uri = Uri.parse(url);
-                new ParseFileTask().execute(uri);
+                new ParseFileTask(false, savedProgress).execute(uri);
                 break;
             }
             case "html": {
                 Uri uri = Uri.parse(url);
-                new ParseHTMLFileTask().execute(uri);
+                new ParseHTMLFileTask(false, savedProgress).execute(uri);
                 break;
             }
         }
@@ -605,21 +685,6 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         return textView;
     }
 
-    @Override
-    protected void onPause() {
-        super.onPause();
-        ScrollView scrollView = findViewById(R.id.scrollView);
-        int scrollY = scrollView.getScrollY();
-        SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
-        SharedPreferences.Editor editor = sharedPreferences.edit();
-        editor.putInt("scrollY", scrollY);
-        editor.putString("paragraphs", getParagraphsAsString());
-        editor.apply();
-
-        // Also save library data
-        saveLibraryData();
-    }
-
     private String getParagraphsAsString() {
         StringBuilder paragraphs = new StringBuilder();
         for (int i = 0; i < parentLayout.getChildCount(); i++) {
@@ -634,14 +699,75 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+        ScrollView scrollView = findViewById(R.id.scrollView);
+        int scrollY = scrollView.getScrollY();
+
+        // Calculate reading progress
+        updateReadingProgress(scrollY);
+
+        SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putInt("scrollY", scrollY);
+        editor.putString("paragraphs", getParagraphsAsString());
+        editor.putString("url", currentUrl);
+        editor.apply();
+
+        // Also save library data
+        saveLibraryData();
+    }
+
+    /**
+     * Calculate and update reading progress for the current chapter
+     */
+    private void updateReadingProgress(int scrollY) {
+        if (currentUrl == null || currentUrl.isEmpty()) {
+            return;
+        }
+
+        ScrollView scrollView = findViewById(R.id.scrollView);
+        if (scrollView == null || scrollView.getChildCount() == 0) {
+            return;
+        }
+
+        int viewHeight = scrollView.getHeight();
+        int contentHeight = scrollView.getChildAt(0).getHeight();
+
+        // Don't update progress if content is shorter than view
+        if (contentHeight <= viewHeight) {
+            return;
+        }
+
+        // Calculate progress percentage
+        int progress = Math.min(100, Math.max(0,
+            (int)(100.0f * scrollY / (contentHeight - viewHeight))));
+
+        // Update the appropriate library item
+        for (LibraryItem item : libraryItems) {
+            if (item.getUrl().equals(currentUrl)) {
+                item.setProgress(progress);
+                break;
+            }
+        }
+
+        // Also update the adapter to refresh the UI
+        libraryAdapter.updateReadingProgress(currentUrl, progress);
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
         int scrollY = sharedPreferences.getInt("scrollY", 0);
         String data = sharedPreferences.getString("paragraphs", "");
+        currentUrl = sharedPreferences.getString("url", "");
         parentLayout.removeAllViews();
 
-        loadExistingContent(data, sharedPreferences.getString("url", ""));
+        loadExistingContent(data, currentUrl);
+
+        // Update reading status in library
+        libraryAdapter.updateCurrentlyReading(currentUrl);
 
         final ScrollView scrollView = findViewById(R.id.scrollView);
         scrollView.post(() -> scrollView.scrollTo(0, scrollY));
@@ -694,6 +820,23 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     @SuppressLint("StaticFieldLeak")
     private class ParseFileTask extends AsyncTask<Uri, Void, List<String>> {
         private Uri fileUri;
+        private boolean scrollToBottom = false;
+        private int savedProgress = 0;
+
+        public ParseFileTask() {
+            this.scrollToBottom = false;
+            this.savedProgress = 0;
+        }
+
+        public ParseFileTask(boolean scrollToBottom) {
+            this.scrollToBottom = scrollToBottom;
+            this.savedProgress = 0;
+        }
+
+        public ParseFileTask(boolean scrollToBottom, int savedProgress) {
+            this.scrollToBottom = scrollToBottom;
+            this.savedProgress = savedProgress;
+        }
 
         @Override
         protected List<String> doInBackground(Uri... uris) {
@@ -738,9 +881,25 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         protected void onPostExecute(List<String> paragraphs) {
             parentLayout.removeAllViews();
             hasData = paragraphs != null && !paragraphs.isEmpty();
+
+            // Update current reading status
+            currentUrl = fileUri.toString();
+            libraryAdapter.updateCurrentlyReading(currentUrl);
+
             if (paragraphs != null && !paragraphs.isEmpty()) {
                 TextView textView = getView(paragraphs.get(0));
                 parentLayout.addView(textView);
+            }
+
+            // Handle scrolling based on context
+            ScrollView scrollView = findViewById(R.id.scrollView);
+
+            if (scrollToBottom && hasData) {
+                scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_DOWN));
+            } else if (savedProgress > 0 && hasData) {
+                scrollView.post(() -> scrollToSavedPosition(scrollView, savedProgress));
+            } else {
+                scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_UP));
             }
         }
     }
@@ -748,6 +907,23 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     @SuppressLint("StaticFieldLeak")
     private class ParseHTMLFileTask extends AsyncTask<Uri, Void, List<String>> {
         private Uri htmlUri;
+        private boolean scrollToBottom = false;
+        private int savedProgress = 0;
+
+        public ParseHTMLFileTask() {
+            this.scrollToBottom = false;
+            this.savedProgress = 0;
+        }
+
+        public ParseHTMLFileTask(boolean scrollToBottom) {
+            this.scrollToBottom = scrollToBottom;
+            this.savedProgress = 0;
+        }
+
+        public ParseHTMLFileTask(boolean scrollToBottom, int savedProgress) {
+            this.scrollToBottom = scrollToBottom;
+            this.savedProgress = savedProgress;
+        }
 
         @Override
         protected List<String> doInBackground(Uri... uris) {
@@ -785,6 +961,11 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         protected void onPostExecute(List<String> paragraphs) {
             parentLayout.removeAllViews();
             hasData = paragraphs != null && !paragraphs.isEmpty();
+
+            // Update current reading status
+            currentUrl = htmlUri.toString();
+            libraryAdapter.updateCurrentlyReading(currentUrl);
+
             if (paragraphs != null) {
                 for (String paragraph : paragraphs) {
                     if (paragraph != null && paragraph.contains("http")) {
@@ -807,12 +988,38 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
 
             // Add to library if not already present
             addToLibrary(htmlUri.toString(), getFileName(htmlUri), "html");
+
+            // Handle scrolling based on context
+            if (scrollToBottom && hasData) {
+                scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_DOWN));
+            } else if (savedProgress > 0 && hasData) {
+                scrollView.post(() -> scrollToSavedPosition(scrollView, savedProgress));
+            } else {
+                scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_UP));
+            }
         }
     }
 
     @SuppressLint("StaticFieldLeak")
     private class WebScrapingTask extends AsyncTask<String, Void, List<String>> {
         private String webUrl;
+        private boolean scrollToBottom = false;
+        private int savedProgress = 0;
+
+        public WebScrapingTask() {
+            this.scrollToBottom = false;
+            this.savedProgress = 0;
+        }
+
+        public WebScrapingTask(boolean scrollToBottom) {
+            this.scrollToBottom = scrollToBottom;
+            this.savedProgress = 0;
+        }
+
+        public WebScrapingTask(boolean scrollToBottom, int savedProgress) {
+            this.scrollToBottom = scrollToBottom;
+            this.savedProgress = savedProgress;
+        }
 
         @Override
         protected List<String> doInBackground(String... strings) {
@@ -932,9 +1139,27 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             // Add to library if not already present
             addToLibrary(webUrl, title, "web");
 
-            new Handler().postDelayed(() -> isLoading = false, 2000); // 2000 milliseconds = 2 seconds
-            ScrollView scrollView = findViewById(R.id.scrollView);
-            scrollView.fullScroll(ScrollView.FOCUS_UP);
+            // Update current reading status
+            currentUrl = webUrl;
+            libraryAdapter.updateCurrentlyReading(webUrl);
+
+            // Delayed actions
+            new Handler().postDelayed(() -> {
+                isLoading = false;
+
+                ScrollView scrollView = findViewById(R.id.scrollView);
+
+                if (scrollToBottom && hasData) {
+                    // For previous chapter loading, scroll to bottom
+                    scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_DOWN));
+                } else if (savedProgress > 0 && hasData) {
+                    // For loading from library with saved progress
+                    scrollView.post(() -> scrollToSavedPosition(scrollView, savedProgress));
+                } else {
+                    // Default - scroll to top
+                    scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_UP));
+                }
+            }, 1000); // Shorter delay for better UX
         }
     }
 
@@ -1013,8 +1238,20 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         isLoading = true;
         String url = urlInput.getText().toString();
         if (!url.isEmpty()) {
+            // Store current chapter URL
+            previousChapterUrl = url;
+
+            // Save progress for current chapter
+            updateReadingProgress(findViewById(R.id.scrollView).getScrollY());
+            saveLibraryData();
+
+            // Get next chapter URL
             url = incrementChapterInUrl(url);
             urlInput.setText(url);
+
+            // Update current URL
+            currentUrl = url;
+            libraryAdapter.updateCurrentlyReading(url);
 
             // Save current content before loading new chapter
             SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
@@ -1023,10 +1260,86 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             myEdit.apply();
 
             new WebScrapingTask().execute(url);
-            ScrollView scrollView = findViewById(R.id.scrollView);
-            scrollView.fullScroll(ScrollView.FOCUS_UP);
         } else {
             isLoading = false;
         }
+    }
+
+    /**
+     * Decrement chapter in URL - inverse of incrementChapterInUrl
+     */
+    private String decrementChapterInUrl(String url) {
+        if (url == null || url.isEmpty()) {
+            return url;
+        }
+        Pattern pattern = Pattern.compile("(\\d+)(?!.*\\d)");
+        Matcher matcher = pattern.matcher(url);
+        if (matcher.find()) {
+            int chapterNumber = Integer.parseInt(matcher.group(1));
+            if (chapterNumber > 1) { // Don't go below chapter 1
+                chapterNumber--;
+                url = matcher.replaceFirst(String.valueOf(chapterNumber));
+            }
+        }
+        return url;
+    }
+
+    /**
+     * Load the previous chapter when scrolling up at the top
+     */
+    private void loadPreviousChapter() {
+        isLoading = true;
+        String url = urlInput.getText().toString();
+
+        if (!url.isEmpty()) {
+            // Store the current chapter URL before changing
+            previousChapterUrl = url;
+
+            // Save current progress for current chapter
+            updateReadingProgress(findViewById(R.id.scrollView).getScrollY());
+            saveLibraryData();
+
+            // Decrement to previous chapter
+            url = decrementChapterInUrl(url);
+
+            // If URL didn't change (likely at chapter 1), don't try to load
+            if (url.equals(previousChapterUrl)) {
+                isLoading = false;
+                return;
+            }
+
+            urlInput.setText(url);
+            currentUrl = url;
+
+            // Load the previous chapter
+            new WebScrapingTask(true).execute(url);
+        } else {
+            isLoading = false;
+        }
+    }
+
+    /**
+     * Scrolls to a position based on saved progress percentage
+     */
+    private void scrollToSavedPosition(ScrollView scrollView, int progressPercentage) {
+        if (scrollView == null || scrollView.getChildCount() == 0 || progressPercentage <= 0) {
+            return;
+        }
+
+        // Get content height
+        int contentHeight = scrollView.getChildAt(0).getHeight();
+        int viewHeight = scrollView.getHeight();
+
+        // Don't scroll if content fits within view
+        if (contentHeight <= viewHeight) {
+            return;
+        }
+
+        // Calculate scroll position from progress percentage
+        int maxScroll = contentHeight - viewHeight;
+        int scrollPosition = (progressPercentage * maxScroll) / 100;
+
+        // Scroll to position
+        scrollView.scrollTo(0, scrollPosition);
     }
 }
