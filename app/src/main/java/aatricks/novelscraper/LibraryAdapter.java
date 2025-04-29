@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Map;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class LibraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     private static final int TYPE_HEADER = 0;
@@ -70,9 +72,11 @@ public class LibraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     }
 
     /**
-     * Extracts a grouping title from the URL's second path segment
-     * For web URLs like https://website/title/chapter, it will use "title"
-     * For file URLs, it will use the filename or "Unknown"
+     * Extracts a grouping title from the URL's path
+     * Intelligently handles different URL formats:
+     * - For URLs like https://website.com/book/novel-name/chapter-X, it will extract "novel-name"
+     * - For URLs like https://website.com/novel-name/chapter-X, it will extract "novel-name"
+     * - For file URLs, it will use the filename or "Unknown"
      */
     private String extractGroupTitle(LibraryItem item) {
         String url = item.getUrl();
@@ -86,10 +90,33 @@ public class LibraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 String path = uri.getPath();
 
                 if (path != null && !path.isEmpty()) {
+                    // Common patterns for novel URLs
+                    Pattern bookPattern = Pattern.compile("/book/([^/]+)/?");
+                    Pattern novelPattern = Pattern.compile("/novel/([^/]+)/?");
+                    Pattern genericPattern = Pattern.compile("/([^/]+)/(?:chapter|c)-\\d+");
+
+                    // First try to match /book/novel-name pattern
+                    Matcher bookMatcher = bookPattern.matcher(path);
+                    if (bookMatcher.find()) {
+                        return formatTitle(bookMatcher.group(1));
+                    }
+
+                    // Then try to match /novel/novel-name pattern
+                    Matcher novelMatcher = novelPattern.matcher(path);
+                    if (novelMatcher.find()) {
+                        return formatTitle(novelMatcher.group(1));
+                    }
+
+                    // Try generic pattern where novel name is before chapter
+                    Matcher genericMatcher = genericPattern.matcher(path);
+                    if (genericMatcher.find()) {
+                        return formatTitle(genericMatcher.group(1));
+                    }
+
+                    // Fallback: look for the second path segment (index 1) if it exists
                     String[] segments = path.split("/");
-                    // Look for the second path segment (index 1) if it exists
                     if (segments.length > 1 && !segments[1].isEmpty()) {
-                        return segments[1];
+                        return formatTitle(segments[1]);
                     }
                 }
 
@@ -112,6 +139,38 @@ public class LibraryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             return item.getTitle() != null && !item.getTitle().isEmpty() ?
                    item.getTitle() : "Unsorted";
         }
+    }
+
+    /**
+     * Formats a title extracted from URL path:
+     * - Replaces hyphens and underscores with spaces
+     * - Capitalizes first letter of each word
+     */
+    private String formatTitle(String rawTitle) {
+        if (rawTitle == null || rawTitle.isEmpty()) {
+            return "Unknown";
+        }
+
+        // Replace hyphens and underscores with spaces
+        String spacedTitle = rawTitle.replace('-', ' ').replace('_', ' ');
+
+        // Capitalize first letter of each word
+        StringBuilder result = new StringBuilder();
+        boolean capitalizeNext = true;
+
+        for (char c : spacedTitle.toCharArray()) {
+            if (Character.isSpaceChar(c)) {
+                capitalizeNext = true;
+                result.append(c);
+            } else if (capitalizeNext) {
+                result.append(Character.toUpperCase(c));
+                capitalizeNext = false;
+            } else {
+                result.append(c);
+            }
+        }
+
+        return result.toString();
     }
 
     @NonNull

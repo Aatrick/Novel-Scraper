@@ -93,7 +93,7 @@
                     android:backgroundTint="#00000000"
                     android:fontFamily="sans-serif-light"
                     android:padding="0dp"
-                    android:text="100"
+                    android:text="10"
                     android:textColor="#FFFFFF"
                     tools:ignore="TextSizeCheck,TouchTargetSizeCheck,VisualLintBounds" />
             </LinearLayout>

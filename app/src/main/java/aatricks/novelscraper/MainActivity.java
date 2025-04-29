@@ -12,6 +12,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.text.Html;
+import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
@@ -137,21 +138,56 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                 // Handle potential page numbers
                 if (Character.isDigit(c)) {
                     int number = Character.getNumericValue(c);
-                    boolean isPossiblePageNumber = false;
 
-                    // Check if this could be a page number (standalone digit or at end of line)
-                    if ((j == paragraph.length() - 1 || !Character.isDigit(paragraph.charAt(j + 1))) && !Character.isDigit(paragraph.charAt(j - 1))) {
-
-                        // Check if number is in sequence with current page
-                        if (Math.abs(number - pageNumber) <= 4 && number != pageNumber) {
-                            isPossiblePageNumber = true;
-                        }
+                    // Check for multi-digit numbers
+                    int numStartPos = j;
+                    int fullNumber = number;
+                    while (j + 1 < paragraph.length() && Character.isDigit(paragraph.charAt(j + 1))) {
+                        j++;
+                        fullNumber = fullNumber * 10 + Character.getNumericValue(paragraph.charAt(j));
                     }
 
-                    if (isPossiblePageNumber && !seenNumbers.contains(number)) {
-                        newParagraph.deleteCharAt(newParagraph.length() - 1);
-                        pageNumber = number;
-                        seenNumbers.add(number);
+                    boolean isPossiblePageNumber = false;
+
+                    // Check if this could be a page number:
+                    // 1. Standalone number (spaces or punctuation before and after)
+                    // 2. At end of paragraph/line
+                    // 3. Preceded by "page" or "pg" keyword (case insensitive)
+
+                    boolean isStandalone = (numStartPos == 0 || !Character.isLetterOrDigit(paragraph.charAt(numStartPos - 1))) &&
+                                          (j == paragraph.length() - 1 || !Character.isLetterOrDigit(paragraph.charAt(j + 1)));
+
+                    boolean isEndOfParagraph = j == paragraph.length() - 1 ||
+                                              (j + 1 < paragraph.length() && paragraph.charAt(j + 1) == '\n');
+
+                    // Check for "page" keyword before the number
+                    boolean hasPageKeyword = false;
+                    if (numStartPos >= 5) { // Check for "page "
+                        String preceding = paragraph.substring(numStartPos - 5, numStartPos).toLowerCase();
+                        hasPageKeyword = preceding.equals("page ") || preceding.endsWith("pg. ") || preceding.endsWith("pg ") || preceding.endsWith("p a g e ");
+                    }
+
+                    // Page numbers are typically sequential and reasonable in size
+                    boolean isReasonablePageNumber = fullNumber > 0 && fullNumber < 1000;
+                    boolean isSequential = Math.abs(fullNumber - pageNumber) <= 2;
+
+                    // Determine if this is a page number based on multiple conditions
+                    isPossiblePageNumber = isReasonablePageNumber &&
+                                          (hasPageKeyword ||
+                                           (isStandalone && isSequential) ||
+                                           (isEndOfParagraph && isSequential));
+
+                    if (isPossiblePageNumber && !seenNumbers.contains(fullNumber)) {
+                        // If we've identified the end of a multi-digit number as a page number,
+                        // delete all the digits from the constructed paragraph
+                        int digitsToDelete = String.valueOf(fullNumber).length();
+                        for (int k = 0; k < digitsToDelete; k++) {
+                            if (newParagraph.length() > 0) {
+                                newParagraph.deleteCharAt(newParagraph.length() - 1);
+                            }
+                        }
+                        pageNumber = fullNumber;
+                        seenNumbers.add(fullNumber);
                     }
                 }
             }
@@ -311,7 +347,7 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         downloadButton.setOnClickListener(v -> {
             String url1 = urlInput.getText().toString();
             if (!url1.isEmpty()) {
-                for (int i = 0; i < 100; i++) {
+                for (int i = 0; i < 10; i++) {
                     url1 = incrementChapterInUrl(url1);
                     new ScrapInAdvance().execute(url1);
                 }
@@ -519,10 +555,19 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             }
         }
 
+        // Save URLs of deleted items to clean their data
+        Set<String> deletedUrls = new HashSet<>();
+        for (LibraryItem item : selectedItems) {
+            deletedUrls.add(item.getUrl());
+        }
+
         // Remove items from library
         libraryItems.removeAll(selectedItems);
         libraryAdapter.setData(libraryItems);
         saveLibraryData();
+
+        // Clean up cached HTML files and progress for all deleted items
+        cleanupDeletedChapterData(deletedUrls);
 
         // If currently reading chapter was deleted, clear the reader
         if (deletingCurrentChapter) {
@@ -540,6 +585,43 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             // Update UI
             urlInput.setText("");
         }
+    }
+
+    /**
+     * Cleans up all data associated with deleted chapters
+     * @param deletedUrls Set of URLs of deleted chapters
+     */
+    private void cleanupDeletedChapterData(Set<String> deletedUrls) {
+        if (deletedUrls.isEmpty()) {
+            return;
+        }
+
+        // 1. Clean any cached HTML files
+        File downloadsDirectory = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        if (downloadsDirectory != null && downloadsDirectory.exists()) {
+            for (String url : deletedUrls) {
+                File htmlFile = new File(downloadsDirectory, url.hashCode() + ".html");
+                if (htmlFile.exists()) {
+                    boolean deleted = htmlFile.delete();
+                    if (!deleted) {
+                        Log.w("MainActivity", "Failed to delete cache file for " + url);
+                    }
+                }
+            }
+        }
+
+        // 2. Clean any stored progress data in SharedPreferences
+        // Retrieve all chapters that have progress stored
+        SharedPreferences progressPrefs = getSharedPreferences("ChapterProgress", MODE_PRIVATE);
+        SharedPreferences.Editor progressEditor = progressPrefs.edit();
+
+        // Remove progress data for deleted chapters
+        for (String url : deletedUrls) {
+            progressEditor.remove(url);
+            progressEditor.remove(url + "_timestamp");
+        }
+
+        progressEditor.apply();
     }
 
     private void exitSelectionMode() {
@@ -800,13 +882,13 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                 if (Math.abs(diffX) > Math.abs(diffY)) {
                     if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
                         if (diffX > 0 && isNearLeftEdge) {
-                            // Right swipe from left edge - open drawer
-                            drawerLayout.openDrawer(findViewById(R.id.navDrawer));
-                            result = true;
+                        // Right swipe from left edge - open drawer
+                        drawerLayout.openDrawer(findViewById(R.id.navDrawer));
+                        result = true;
                         } else if (diffX < 0 && drawerLayout.isDrawerOpen(findViewById(R.id.navDrawer))) {
-                            // Left swipe - close drawer if open
-                            drawerLayout.closeDrawers();
-                            result = true;
+                        // Left swipe - close drawer if open
+                        drawerLayout.closeDrawers();
+                        result = true;
                         }
                     }
                 }
@@ -1191,6 +1273,41 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                         BufferedSink sink = Okio.buffer(Okio.sink(htmlFile));
                         sink.writeAll(response.body().source());
                         sink.close();
+
+                        // Extract title from downloaded HTML
+                        String title = null;
+                        try {
+                            Document document = Jsoup.parse(htmlFile, "UTF-8");
+                            title = document.title();
+                            if (title.isEmpty()) {
+                                Element titleElement = document.selectFirst("h1");
+                                if (titleElement != null) {
+                                    title = titleElement.text();
+                                }
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+
+                        // Add chapter to library in background
+                        final String finalTitle = title;
+                        // Need to do this on UI thread to avoid concurrency issues
+                        runOnUiThread(() -> {
+                            // Check if URL already exists before adding
+                            boolean exists = false;
+                            for (LibraryItem item : libraryItems) {
+                                if (item.getUrl().equals(url)) {
+                                    exists = true;
+                                    break;
+                                }
+                            }
+
+                            if (!exists) {
+                                LibraryItem newItem = new LibraryItem(finalTitle, url, System.currentTimeMillis(), "web");
+                                libraryItems.add(newItem);
+                                saveLibraryData();
+                            }
+                        });
                     }
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -1198,6 +1315,12 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             }
 
             return null;
+        }
+
+        @Override
+        protected void onPostExecute(Void result) {
+            // Update the library UI with any new chapters
+            libraryAdapter.setData(libraryItems);
         }
     }
 
