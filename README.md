@@ -2,10 +2,10 @@
 
 - URL Scraping, parsing and styling (online and offline) with support for images
 - PDF parsing and styling
-- Loads next chapter when user reaches the end of the current chapter
-- Downloads 100 next chapters for offline reading
+- Loads next chapter when user reaches the end of the current chapter (also features loading the previous chapter by scrolling from the top)
+- Downloads 10 next chapters for offline reading
 - Bionic reading*
-- Library of weburls and pdfs grouped by names
+- Library of weburls and pdfs grouped by names with progress saved in between chapters
 - User-friendly interface for easy navigation
 
 ---
@@ -15,7 +15,8 @@
 Simply download and install the release apk.
 
 
-![Homepage with library opened](./Novel_Scraper.jpg)
+![Homepage with library opened](https://github.com/user-attachments/assets/1297aef1-e09c-46cd-890d-1ba105c0c0f4)
+
 
 ---
 
