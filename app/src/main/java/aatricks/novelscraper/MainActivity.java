@@ -90,7 +90,6 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
 
     private String currentUrl = "";
     private boolean isAtTop = false;
-    private boolean isScrollingUp = false;
     private String previousChapterUrl = "";
 
     @NonNull
@@ -135,55 +134,41 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                     newParagraph.append(" ");
                 }
 
-                // Handle potential page numbers
+                // Handle potential page numbers (stricter check)
                 if (Character.isDigit(c)) {
-                    int number = Character.getNumericValue(c);
-
-                    // Check for multi-digit numbers
                     int numStartPos = j;
-                    int fullNumber = number;
+                    int fullNumber = Character.getNumericValue(c);
+                    int digitCount = 1;
                     while (j + 1 < paragraph.length() && Character.isDigit(paragraph.charAt(j + 1))) {
                         j++;
                         fullNumber = fullNumber * 10 + Character.getNumericValue(paragraph.charAt(j));
+                        digitCount++;
                     }
 
-                    boolean isPossiblePageNumber = false;
-
-                    // Check if this could be a page number:
-                    // 1. Standalone number (spaces or punctuation before and after)
-                    // 2. At end of paragraph/line
-                    // 3. Preceded by "page" or "pg" keyword (case insensitive)
-
-                    boolean isStandalone = (numStartPos == 0 || !Character.isLetterOrDigit(paragraph.charAt(numStartPos - 1))) &&
-                                          (j == paragraph.length() - 1 || !Character.isLetterOrDigit(paragraph.charAt(j + 1)));
-
-                    boolean isEndOfParagraph = j == paragraph.length() - 1 ||
-                                              (j + 1 < paragraph.length() && paragraph.charAt(j + 1) == '\n');
+                    // Only consider as page number if surrounded by whitespace or punctuation
+                    boolean leftBoundary = !Character.isLetterOrDigit(paragraph.charAt(numStartPos - 1));
+                    boolean rightBoundary = (j == paragraph.length() - 1) || !Character.isLetterOrDigit(paragraph.charAt(j + 1));
 
                     // Check for "page" keyword before the number
                     boolean hasPageKeyword = false;
-                    if (numStartPos >= 5) { // Check for "page "
+                    if (numStartPos >= 5) {
                         String preceding = paragraph.substring(numStartPos - 5, numStartPos).toLowerCase();
                         hasPageKeyword = preceding.equals("page ") || preceding.endsWith("pg. ") || preceding.endsWith("pg ") || preceding.endsWith("p a g e ");
                     }
 
-                    // Page numbers are typically sequential and reasonable in size
                     boolean isReasonablePageNumber = fullNumber > 0 && fullNumber < 1000;
                     boolean isSequential = Math.abs(fullNumber - pageNumber) <= 2;
 
-                    // Determine if this is a page number based on multiple conditions
-                    isPossiblePageNumber = isReasonablePageNumber &&
-                                          (hasPageKeyword ||
-                                           (isStandalone && isSequential) ||
-                                           (isEndOfParagraph && isSequential));
+                    boolean isPossiblePageNumber = isReasonablePageNumber &&
+                        (hasPageKeyword || (leftBoundary && rightBoundary && isSequential));
 
                     if (isPossiblePageNumber && !seenNumbers.contains(fullNumber)) {
-                        // If we've identified the end of a multi-digit number as a page number,
-                        // delete all the digits from the constructed paragraph
-                        int digitsToDelete = String.valueOf(fullNumber).length();
-                        for (int k = 0; k < digitsToDelete; k++) {
-                            if (newParagraph.length() > 0) {
-                                newParagraph.deleteCharAt(newParagraph.length() - 1);
+                        // Only delete if it's a clear page number (not part of a word)
+                        for (int k = 0; k < digitCount; k++) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                                if (!newParagraph.isEmpty()) {
+                                    newParagraph.deleteCharAt(newParagraph.length() - 1);
+                                }
                             }
                         }
                         pageNumber = fullNumber;
@@ -770,8 +755,7 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     private String getParagraphsAsString() {
         StringBuilder paragraphs = new StringBuilder();
         for (int i = 0; i < parentLayout.getChildCount(); i++) {
-            if (parentLayout.getChildAt(i) instanceof TextView) {
-                TextView textView = (TextView) parentLayout.getChildAt(i);
+            if (parentLayout.getChildAt(i) instanceof TextView textView) {
                 if (textView.getText() != null) {
                     paragraphs.append(textView.getText().toString()).append(" ,");
                 }
@@ -902,16 +886,11 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     @SuppressLint("StaticFieldLeak")
     private class ParseFileTask extends AsyncTask<Uri, Void, List<String>> {
         private Uri fileUri;
-        private boolean scrollToBottom = false;
-        private int savedProgress = 0;
+        private final boolean scrollToBottom;
+        private final int savedProgress;
 
         public ParseFileTask() {
             this.scrollToBottom = false;
-            this.savedProgress = 0;
-        }
-
-        public ParseFileTask(boolean scrollToBottom) {
-            this.scrollToBottom = scrollToBottom;
             this.savedProgress = 0;
         }
 
@@ -989,16 +968,11 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     @SuppressLint("StaticFieldLeak")
     private class ParseHTMLFileTask extends AsyncTask<Uri, Void, List<String>> {
         private Uri htmlUri;
-        private boolean scrollToBottom = false;
-        private int savedProgress = 0;
+        private final boolean scrollToBottom;
+        private final int savedProgress;
 
         public ParseHTMLFileTask() {
             this.scrollToBottom = false;
-            this.savedProgress = 0;
-        }
-
-        public ParseHTMLFileTask(boolean scrollToBottom) {
-            this.scrollToBottom = scrollToBottom;
             this.savedProgress = 0;
         }
 
@@ -1085,8 +1059,8 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     @SuppressLint("StaticFieldLeak")
     private class WebScrapingTask extends AsyncTask<String, Void, List<String>> {
         private String webUrl;
-        private boolean scrollToBottom = false;
-        private int savedProgress = 0;
+        private final boolean scrollToBottom;
+        private final int savedProgress;
 
         public WebScrapingTask() {
             this.scrollToBottom = false;
@@ -1398,7 +1372,7 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         Pattern pattern = Pattern.compile("(\\d+)(?!.*\\d)");
         Matcher matcher = pattern.matcher(url);
         if (matcher.find()) {
-            int chapterNumber = Integer.parseInt(matcher.group(1));
+            int chapterNumber = Integer.parseInt(Objects.requireNonNull(matcher.group(1)));
             if (chapterNumber > 1) { // Don't go below chapter 1
                 chapterNumber--;
                 url = matcher.replaceFirst(String.valueOf(chapterNumber));
