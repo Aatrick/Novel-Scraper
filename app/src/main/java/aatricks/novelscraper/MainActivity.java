@@ -24,7 +24,6 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
@@ -33,19 +32,12 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfReader;
 import com.itextpdf.kernel.pdf.canvas.parser.PdfTextExtractor;
 import com.squareup.picasso.Picasso;
-
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -59,14 +51,23 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import okio.BufferedSink;
 import okio.Okio;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
-public class MainActivity extends AppCompatActivity implements LibraryAdapter.OnItemClickListener, LibraryAdapter.OnItemLongClickListener, LibraryAdapter.OnSelectionChangeListener {
+public class MainActivity
+    extends AppCompatActivity
+    implements
+        LibraryAdapter.OnItemClickListener,
+        LibraryAdapter.OnItemLongClickListener,
+        LibraryAdapter.OnSelectionChangeListener {
+
     private boolean hasData = false;
     private static final int PICK_HTML_FILE = 1;
     private LinearLayout parentLayout;
@@ -93,8 +94,17 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     private String previousChapterUrl = "";
 
     @NonNull
-    private static StringBuilder getStringBuilder(List<String> paragraphs, int i) {
-        if (paragraphs == null || i < 0 || i >= paragraphs.size() || paragraphs.get(i) == null) {
+    private static StringBuilder getStringBuilder(
+        List<String> paragraphs,
+        int i,
+        boolean isPdfContent
+    ) {
+        if (
+            paragraphs == null ||
+            i < 0 ||
+            i >= paragraphs.size() ||
+            paragraphs.get(i) == null
+        ) {
             return new StringBuilder();
         }
 
@@ -119,8 +129,12 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                 // Handle newlines
                 if (c == '\n') {
                     // Add paragraph breaks after sentences
-                    if (prevChar == '.' || prevChar == '"' ||
-                        prevPrevChar == '.' || prevPrevChar == '"') {
+                    if (
+                        prevChar == '.' ||
+                        prevChar == '"' ||
+                        prevPrevChar == '.' ||
+                        prevPrevChar == '"'
+                    ) {
                         newParagraph.append("\n\n\n");
                     }
 
@@ -134,40 +148,300 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                     newParagraph.append(" ");
                 }
 
-                // Handle potential page numbers (stricter check)
-                if (Character.isDigit(c)) {
+                // Handle potential page numbers (stricter check) - only for PDF content
+                if (Character.isDigit(c) && isPdfContent) {
                     int numStartPos = j;
                     int fullNumber = Character.getNumericValue(c);
                     int digitCount = 1;
-                    while (j + 1 < paragraph.length() && Character.isDigit(paragraph.charAt(j + 1))) {
+                    boolean hasComma = false;
+                    boolean hasPeriod = false;
+
+                    // Check if number is in brackets/parentheses
+                    boolean isInBrackets = false;
+                    if (numStartPos > 0) {
+                        prevChar = paragraph.charAt(numStartPos - 1);
+                        isInBrackets =
+                            prevChar == '(' ||
+                            prevChar == '[' ||
+                            prevChar == '{' ||
+                            prevChar == '<' ||
+                            prevChar == '"' ||
+                            prevChar == '\'';
+                    }
+
+                    // Collect the complete number with potential commas
+                    StringBuilder numberStr = new StringBuilder();
+                    numberStr.append(c);
+
+                    // Store the start position to check if we need to preserve the entire number
+                    int originalNumStartPos = j;
+
+                    while (
+                        j + 1 < paragraph.length() &&
+                        (Character.isDigit(paragraph.charAt(j + 1)) ||
+                            paragraph.charAt(j + 1) == ',' ||
+                            paragraph.charAt(j + 1) == '.')
+                    ) {
                         j++;
-                        fullNumber = fullNumber * 10 + Character.getNumericValue(paragraph.charAt(j));
-                        digitCount++;
+                        char nextChar = paragraph.charAt(j);
+                        numberStr.append(nextChar);
+
+                        if (nextChar == ',') {
+                            hasComma = true;
+                        } else if (nextChar == '.') {
+                            hasPeriod = true;
+                        } else {
+                            fullNumber =
+                                fullNumber * 10 +
+                                Character.getNumericValue(nextChar);
+                            digitCount++;
+                        }
+                    }
+
+                    // Check for suffixes like "th", "rd", "nd", etc.
+                    boolean hasOrdinalSuffix = false;
+                    if (j + 2 < paragraph.length()) {
+                        String possibleSuffix = paragraph.substring(
+                            j + 1,
+                            Math.min(j + 3, paragraph.length())
+                        );
+                        hasOrdinalSuffix =
+                            possibleSuffix.startsWith("th") ||
+                            possibleSuffix.startsWith("st") ||
+                            possibleSuffix.startsWith("nd") ||
+                            possibleSuffix.startsWith("rd");
+                    }
+
+                    // Check for text directly before or after the number
+                    boolean inTextualContext = false;
+                    if (numStartPos > 1) {
+                        String preceding = paragraph
+                            .substring(
+                                Math.max(0, numStartPos - 10),
+                                numStartPos
+                            )
+                            .toLowerCase()
+                            .trim();
+                        inTextualContext =
+                            preceding.endsWith("the ") ||
+                            preceding.endsWith("at ") ||
+                            preceding.endsWith("to ") ||
+                            preceding.endsWith("level ") ||
+                            preceding.endsWith("floor ");
+                    }
+
+                    // Check if number is followed by a closing bracket/parenthesis
+                    boolean hasClosingBracket = false;
+                    if (j + 1 < paragraph.length()) {
+                        char nextChar = paragraph.charAt(j + 1);
+                        hasClosingBracket =
+                            nextChar == ')' ||
+                            nextChar == ']' ||
+                            nextChar == '}' ||
+                            nextChar == '>' ||
+                            nextChar == '"' ||
+                            nextChar == '\'';
+                    }
+
+                    // Check for mathematical operators before or after the number
+                    boolean hasOperator = false;
+                    if (numStartPos > 0) {
+                        prevChar = paragraph.charAt(numStartPos - 1);
+                        hasOperator =
+                            prevChar == '+' ||
+                            prevChar == '-' ||
+                            prevChar == '×' ||
+                            prevChar == 'x' ||
+                            prevChar == '*' ||
+                            prevChar == '/' ||
+                            prevChar == '=' ||
+                            prevChar == '÷';
+                    }
+
+                    if (j + 1 < paragraph.length()) {
+                        char nextChar = paragraph.charAt(j + 1);
+                        hasOperator =
+                            hasOperator ||
+                            nextChar == '+' ||
+                            nextChar == '-' ||
+                            nextChar == '×' ||
+                            nextChar == 'x' ||
+                            nextChar == '*' ||
+                            nextChar == '/' ||
+                            nextChar == '=' ||
+                            nextChar == '÷';
+                    }
+
+                    // Also check for space + operator patterns
+                    boolean hasSpacedOperator = false;
+                    if (
+                        numStartPos > 1 &&
+                        paragraph.charAt(numStartPos - 1) == ' '
+                    ) {
+                        prevPrevChar = paragraph.charAt(numStartPos - 2);
+                        hasSpacedOperator =
+                            prevPrevChar == '+' ||
+                            prevPrevChar == '-' ||
+                            prevPrevChar == '×' ||
+                            prevPrevChar == 'x' ||
+                            prevPrevChar == '*' ||
+                            prevPrevChar == '/' ||
+                            prevPrevChar == '=' ||
+                            prevPrevChar == '÷';
+                    }
+
+                    if (
+                        j + 2 < paragraph.length() &&
+                        paragraph.charAt(j + 1) == ' '
+                    ) {
+                        char nextNextChar = paragraph.charAt(j + 2);
+                        hasSpacedOperator =
+                            hasSpacedOperator ||
+                            nextNextChar == '+' ||
+                            nextNextChar == '-' ||
+                            nextNextChar == '×' ||
+                            nextNextChar == 'x' ||
+                            nextNextChar == '*' ||
+                            nextNextChar == '/' ||
+                            nextNextChar == '=' ||
+                            nextNextChar == '÷';
+                    }
+
+                    // Check if number is preceded or followed by quotes
+                    if (numStartPos > 0) {
+                        boolean isInQuotes = paragraph.charAt(numStartPos - 1) == '"' ||
+                                paragraph.charAt(numStartPos - 1) == '\'' ||
+                                (j + 1 < paragraph.length() &&
+                                        (paragraph.charAt(j + 1) == '"' ||
+                                                paragraph.charAt(j + 1) == '\''));
+                    }
+
+                    // Check for space + colon/semicolon pattern
+                    boolean hasSpacedPunctuation = false;
+                    if (j + 2 < paragraph.length()) {
+                        hasSpacedPunctuation =
+                            paragraph.charAt(j + 1) == ' ' &&
+                            (paragraph.charAt(j + 2) == ':' ||
+                                paragraph.charAt(j + 2) == ';');
                     }
 
                     // Only consider as page number if surrounded by whitespace or punctuation
-                    boolean leftBoundary = !Character.isLetterOrDigit(paragraph.charAt(numStartPos - 1));
-                    boolean rightBoundary = (j == paragraph.length() - 1) || !Character.isLetterOrDigit(paragraph.charAt(j + 1));
+                    boolean leftBoundary = !Character.isLetterOrDigit(
+                        paragraph.charAt(numStartPos - 1)
+                    );
+                    boolean rightBoundary =
+                        (j == paragraph.length() - 1) ||
+                        (!Character.isLetterOrDigit(paragraph.charAt(j + 1)) &&
+                            !hasOrdinalSuffix);
 
                     // Check for "page" keyword before the number
                     boolean hasPageKeyword = false;
                     if (numStartPos >= 5) {
-                        String preceding = paragraph.substring(numStartPos - 5, numStartPos).toLowerCase();
-                        hasPageKeyword = preceding.equals("page ") || preceding.endsWith("pg. ") || preceding.endsWith("pg ") || preceding.endsWith("p a g e ");
+                        String preceding = paragraph
+                            .substring(numStartPos - 5, numStartPos)
+                            .toLowerCase();
+                        hasPageKeyword =
+                            preceding.equals("page ") ||
+                            preceding.endsWith("pg. ") ||
+                            preceding.endsWith("pg ") ||
+                            preceding.endsWith("p a g e ");
                     }
 
-                    boolean isReasonablePageNumber = fullNumber > 0 && fullNumber < 1000;
-                    boolean isSequential = Math.abs(fullNumber - pageNumber) <= 2;
+                    boolean isReasonablePageNumber =
+                        fullNumber > 0 && fullNumber < 1000;
+                    boolean isSequential =
+                        Math.abs(fullNumber - pageNumber) <= 2;
 
-                    boolean isPossiblePageNumber = isReasonablePageNumber &&
-                        (hasPageKeyword || (leftBoundary && rightBoundary && isSequential));
+                    // Don't remove the number if:
+                    // 1. It has a comma (like 3,000)
+                    // 2. It has a period followed by a digit (like 77.0)
+                    // 3. It has an ordinal suffix (like 3rd, 77th)
+                    // 4. It's in a textual context (like "the 77 floor")
+                    // 5. It's followed by punctuation and text (like "at 77, the...")
+                    // 6. It's in brackets/parentheses like (1), [1], {1}, etc.
+                    // 7. It's preceded by "..." or followed by "..."
+                    // 8. It has a colon or semicolon before or after: 79;, 79:, etc.
+                    // 9. It's part of a mathematical expression: +2, 2+, 2 + 3, etc.
+                    boolean hasEllipsisBefore =
+                        numStartPos >= 3 &&
+                        paragraph
+                            .substring(numStartPos - 3, numStartPos)
+                            .equals("...");
+                    boolean hasEllipsisAfter =
+                        j + 3 < paragraph.length() &&
+                        paragraph.substring(j + 1, j + 4).equals("...");
 
-                    if (isPossiblePageNumber && !seenNumbers.contains(fullNumber)) {
+                    // Check for colons/semicolons
+                    boolean hasColon = false;
+                    boolean hasSemicolon = false;
+                    if (j + 1 < paragraph.length()) {
+                        char nextChar = paragraph.charAt(j + 1);
+                        hasColon = nextChar == ':';
+                        hasSemicolon = nextChar == ';';
+                    }
+
+                    hasSpacedPunctuation = false;
+                    if (
+                        j + 2 < paragraph.length() &&
+                        paragraph.charAt(j + 1) == ' '
+                    ) {
+                        char nextNextChar = paragraph.charAt(j + 2);
+                        hasSpacedPunctuation =
+                            nextNextChar == ':' || nextNextChar == ';';
+                    }
+
+                    // Check if the number is quoted
+                    boolean isQuoted = false;
+                    if (numStartPos > 0) {
+                        isQuoted =
+                            paragraph.charAt(numStartPos - 1) == '"' ||
+                            paragraph.charAt(numStartPos - 1) == '\'' ||
+                            (j + 1 < paragraph.length() &&
+                                (paragraph.charAt(j + 1) == '"' ||
+                                    paragraph.charAt(j + 1) == '\''));
+                    }
+
+                    boolean shouldPreserve =
+                        hasComma ||
+                        (hasPeriod &&
+                            j + 1 < paragraph.length() &&
+                            Character.isDigit(paragraph.charAt(j + 1))) ||
+                        hasOrdinalSuffix ||
+                        inTextualContext ||
+                        (isInBrackets && hasClosingBracket) ||
+                        hasEllipsisBefore ||
+                        hasEllipsisAfter ||
+                        hasOperator ||
+                        hasSpacedOperator ||
+                        hasColon ||
+                        hasSemicolon ||
+                        hasSpacedPunctuation ||
+                        isQuoted ||
+                        (j + 2 < paragraph.length() &&
+                            (paragraph.charAt(j + 1) == '.' ||
+                                paragraph.charAt(j + 1) == ',') &&
+                            Character.isLetter(paragraph.charAt(j + 2)));
+
+                    boolean isPossiblePageNumber =
+                        isReasonablePageNumber &&
+                        (hasPageKeyword ||
+                            (leftBoundary && rightBoundary && isSequential)) &&
+                        !shouldPreserve;
+
+                    if (
+                        isPossiblePageNumber &&
+                        !seenNumbers.contains(fullNumber)
+                    ) {
                         // Only delete if it's a clear page number (not part of a word)
-                        for (int k = 0; k < digitCount; k++) {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                        for (int k = 0; k < numberStr.length(); k++) {
+                            if (
+                                Build.VERSION.SDK_INT >=
+                                Build.VERSION_CODES.VANILLA_ICE_CREAM
+                            ) {
                                 if (!newParagraph.isEmpty()) {
-                                    newParagraph.deleteCharAt(newParagraph.length() - 1);
+                                    newParagraph.deleteCharAt(
+                                        newParagraph.length() - 1
+                                    );
                                 }
                             }
                         }
@@ -197,7 +471,9 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         Pattern pattern = Pattern.compile("(\\d+)(?!.*\\d)");
         Matcher matcher = pattern.matcher(url);
         if (matcher.find()) {
-            int chapterNumber = Integer.parseInt(Objects.requireNonNull(matcher.group(1)));
+            int chapterNumber = Integer.parseInt(
+                Objects.requireNonNull(matcher.group(1))
+            );
             chapterNumber++;
             url = matcher.replaceFirst(String.valueOf(chapterNumber));
         }
@@ -210,13 +486,17 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         Window window = getWindow();
-        window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS
+        );
         window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
         window.setStatusBarColor(ContextCompat.getColor(this, R.color.BLACK));
 
         // Initialize views
         drawerLayout = findViewById(R.id.drawerLayout);
-        RecyclerView libraryRecyclerView = findViewById(R.id.libraryRecyclerView);
+        RecyclerView libraryRecyclerView = findViewById(
+            R.id.libraryRecyclerView
+        );
         ScrollView scrollView = findViewById(R.id.scrollView);
         parentLayout = findViewById(R.id.parentLayout);
         urlInput = findViewById(R.id.urlInput);
@@ -225,27 +505,36 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         deleteSelectedButton = findViewById(R.id.deleteSelectedButton);
 
         // Setup gesture detector for swipes
-        gestureDetector = new GestureDetectorCompat(this, new SwipeGestureListener());
+        gestureDetector = new GestureDetectorCompat(
+            this,
+            new SwipeGestureListener()
+        );
 
         // Configure drawer to work with ScrollView properly
-        drawerLayout.addDrawerListener(new DrawerLayout.SimpleDrawerListener() {
-            @Override
-            public void onDrawerSlide(View drawerView, float slideOffset) {
-                // No need to disable ScrollView - let it function normally
-            }
+        drawerLayout.addDrawerListener(
+            new DrawerLayout.SimpleDrawerListener() {
+                @Override
+                public void onDrawerSlide(View drawerView, float slideOffset) {
+                    // No need to disable ScrollView - let it function normally
+                }
 
-            @Override
-            public void onDrawerOpened(View drawerView) {
-                // Save reading progress when drawer is opened
-                updateReadingProgress(findViewById(R.id.scrollView).getScrollY());
+                @Override
+                public void onDrawerOpened(View drawerView) {
+                    // Save reading progress when drawer is opened
+                    updateReadingProgress(
+                        findViewById(R.id.scrollView).getScrollY()
+                    );
+                }
             }
-        });
+        );
 
         // Setup RecyclerView for library items
         libraryAdapter = new LibraryAdapter(this, this, this);
         libraryRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         libraryRecyclerView.setAdapter(libraryAdapter);
-        libraryRecyclerView.addItemDecoration(new DividerItemDecoration(this, DividerItemDecoration.VERTICAL));
+        libraryRecyclerView.addItemDecoration(
+            new DividerItemDecoration(this, DividerItemDecoration.VERTICAL)
+        );
 
         // Load library data
         loadLibraryData();
@@ -255,42 +544,52 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         drawerLayout.requestLayout();
 
         // Setup touch listeners with improved handling
-        scrollView.setOnTouchListener(new View.OnTouchListener() {
-            private float startX = 0;
-            private static final int EDGE_THRESHOLD = 50; // dp
-            private final float density = getResources().getDisplayMetrics().density;
-            private final int edgeThresholdPx = (int) (EDGE_THRESHOLD * density);
+        scrollView.setOnTouchListener(
+            new View.OnTouchListener() {
+                private float startX = 0;
+                private static final int EDGE_THRESHOLD = 50; // dp
+                private final float density = getResources()
+                    .getDisplayMetrics()
+                    .density;
+                private final int edgeThresholdPx = (int) (EDGE_THRESHOLD *
+                    density);
 
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                switch (event.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                        // Store initial touch position
-                        startX = event.getX();
-                        // Let ScrollView handle down event for scrolling
-                        v.onTouchEvent(event);
-                        break;
-                    case MotionEvent.ACTION_MOVE:
-                        // Handle horizontal swipes near edge for drawer
-                        if (startX < edgeThresholdPx && event.getX() > startX + edgeThresholdPx) {
-                            // Right swipe from left edge - open drawer
-                            drawerLayout.openDrawer(findViewById(R.id.navDrawer));
-                            return true;
-                        }
-                        // Let ScrollView handle move event
-                        v.onTouchEvent(event);
-                        break;
-                    case MotionEvent.ACTION_UP:
-                    case MotionEvent.ACTION_CANCEL:
-                        // Let ScrollView handle up/cancel event to stop scrolling
-                        v.onTouchEvent(event);
-                        v.performClick();
-                        break;
+                @Override
+                public boolean onTouch(View v, MotionEvent event) {
+                    switch (event.getAction()) {
+                        case MotionEvent.ACTION_DOWN:
+                            // Store initial touch position
+                            startX = event.getX();
+                            // Let ScrollView handle down event for scrolling
+                            v.onTouchEvent(event);
+                            break;
+                        case MotionEvent.ACTION_MOVE:
+                            // Handle horizontal swipes near edge for drawer
+                            if (
+                                startX < edgeThresholdPx &&
+                                event.getX() > startX + edgeThresholdPx
+                            ) {
+                                // Right swipe from left edge - open drawer
+                                drawerLayout.openDrawer(
+                                    findViewById(R.id.navDrawer)
+                                );
+                                return true;
+                            }
+                            // Let ScrollView handle move event
+                            v.onTouchEvent(event);
+                            break;
+                        case MotionEvent.ACTION_UP:
+                        case MotionEvent.ACTION_CANCEL:
+                            // Let ScrollView handle up/cancel event to stop scrolling
+                            v.onTouchEvent(event);
+                            v.performClick();
+                            break;
+                    }
+                    // Return true to indicate we've handled the event
+                    return true;
                 }
-                // Return true to indicate we've handled the event
-                return true;
             }
-        });
+        );
 
         // Simplify gesture detection for mainContent
         findViewById(R.id.mainContent).setOnTouchListener((v, event) ->
@@ -311,7 +610,10 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             exitSelectionMode();
         });
 
-        SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
+        SharedPreferences sharedPreferences = getSharedPreferences(
+            "MySharedPref",
+            MODE_PRIVATE
+        );
         String url = sharedPreferences.getString("url", "");
         String data = sharedPreferences.getString("paragraphs", "");
         urlInput.setText(url);
@@ -340,70 +642,79 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         });
 
         // Calculate quarter screen height for security scroll feature
-        QuarterScreenHeight = getResources().getDisplayMetrics().heightPixels / 4.0f;
+        QuarterScreenHeight =
+            getResources().getDisplayMetrics().heightPixels / 4.0f;
 
         // Setup scroll security mechanism
         scrollView.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
-            case MotionEvent.ACTION_DOWN:
-                initialTouchY = event.getY();
-                break;
-            case MotionEvent.ACTION_MOVE:
-                float currentY = event.getY();
-                float deltaY = initialTouchY - currentY;
+                case MotionEvent.ACTION_DOWN:
+                    initialTouchY = event.getY();
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    float currentY = event.getY();
+                    float deltaY = initialTouchY - currentY;
 
-                if (isBottomReached && securityScrollEnabled) {
-                // Track scroll distance when bottom security scroll is active
-                totalScrollDistance += Math.abs(deltaY);
-                initialTouchY = currentY;
+                    if (isBottomReached && securityScrollEnabled) {
+                        // Track scroll distance when bottom security scroll is active
+                        totalScrollDistance += Math.abs(deltaY);
+                        initialTouchY = currentY;
 
-                // Check if user has scrolled quarter screen height
-                if (totalScrollDistance >= QuarterScreenHeight) {
-                    // Trigger loading next chapter
-                    loadNextChapter();
-                    resetScrollSecurity();
-                }
-                } else if (isAtTop && deltaY < 0 && securityScrollEnabled) {
-                // Track upward scroll distance when at top
-                totalScrollDistance += Math.abs(deltaY);
-                initialTouchY = currentY;
+                        // Check if user has scrolled quarter screen height
+                        if (totalScrollDistance >= QuarterScreenHeight) {
+                            // Trigger loading next chapter
+                            loadNextChapter();
+                            resetScrollSecurity();
+                        }
+                    } else if (isAtTop && deltaY < 0 && securityScrollEnabled) {
+                        // Track upward scroll distance when at top
+                        totalScrollDistance += Math.abs(deltaY);
+                        initialTouchY = currentY;
 
-                // Check if user has scrolled quarter screen height upward
-                if (totalScrollDistance >= QuarterScreenHeight) {
-                    // Trigger loading previous chapter
-                    loadPreviousChapter();
-                    resetScrollSecurity();
-                }
-                }
-                break;
-            case MotionEvent.ACTION_UP:
-            case MotionEvent.ACTION_CANCEL:
-                if ((isBottomReached || isAtTop) && !securityScrollEnabled) {
-                // First time reaching edge, enable security
-                securityScrollEnabled = true;
-                totalScrollDistance = 0;
-                }
-                break;
+                        // Check if user has scrolled quarter screen height upward
+                        if (totalScrollDistance >= QuarterScreenHeight) {
+                            // Trigger loading previous chapter
+                            loadPreviousChapter();
+                            resetScrollSecurity();
+                        }
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    if (
+                        (isBottomReached || isAtTop) && !securityScrollEnabled
+                    ) {
+                        // First time reaching edge, enable security
+                        securityScrollEnabled = true;
+                        totalScrollDistance = 0;
+                    }
+                    break;
             }
 
             // Let the ScrollView handle the event
             return v.onTouchEvent(event);
         });
 
-        scrollView.getViewTreeObserver().addOnScrollChangedListener(() -> {
-            if (!scrollView.canScrollVertically(1) && !isLoading && hasData) {
-            // Reached bottom, activate security scroll
-            isBottomReached = true;
-            isAtTop = false;
-            } else if (!scrollView.canScrollVertically(-1) && !isLoading && hasData) {
-            // Reached top, activate security scroll
-            isAtTop = true;
-            isBottomReached = false;
-            } else {
-            // Not at edges anymore, reset security
-            resetScrollSecurity();
-            }
-        });
+        scrollView
+            .getViewTreeObserver()
+            .addOnScrollChangedListener(() -> {
+                if (
+                    !scrollView.canScrollVertically(1) && !isLoading && hasData
+                ) {
+                    // Reached bottom, activate security scroll
+                    isBottomReached = true;
+                    isAtTop = false;
+                } else if (
+                    !scrollView.canScrollVertically(-1) && !isLoading && hasData
+                ) {
+                    // Reached top, activate security scroll
+                    isAtTop = true;
+                    isBottomReached = false;
+                } else {
+                    // Not at edges anymore, reset security
+                    resetScrollSecurity();
+                }
+            });
 
         scrapButton.setOnClickListener(v -> {
             String url3 = urlInput.getText().toString();
@@ -435,11 +746,13 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                     if (paragraph != null && paragraph.contains("http")) {
                         StringBuilder newParagraph = new StringBuilder();
                         for (int j = 0; j < paragraph.length(); j++) {
-                            if (paragraph.charAt(j) == 'h' && j + 3 < paragraph.length() &&
+                            if (
+                                paragraph.charAt(j) == 'h' &&
+                                j + 3 < paragraph.length() &&
                                 paragraph.charAt(j + 1) == 't' &&
                                 paragraph.charAt(j + 2) == 't' &&
-                                paragraph.charAt(j + 3) == 'p') {
-
+                                paragraph.charAt(j + 3) == 'p'
+                            ) {
                                 for (int k = j; k < paragraph.length(); k++) {
                                     if (paragraph.charAt(k) == ' ') {
                                         break;
@@ -450,15 +763,25 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                             }
                         }
                         ImageView imageView = new ImageView(MainActivity.this);
-                        Picasso.get().load(String.valueOf(newParagraph)).into(imageView);
-                        LinearLayout.LayoutParams LayoutParams = new LinearLayout.LayoutParams(
+                        Picasso.get()
+                            .load(String.valueOf(newParagraph))
+                            .into(imageView);
+                        LinearLayout.LayoutParams LayoutParams =
+                            new LinearLayout.LayoutParams(
                                 LinearLayout.LayoutParams.WRAP_CONTENT,
                                 LinearLayout.LayoutParams.WRAP_CONTENT
-                        );
+                            );
                         imageView.setLayoutParams(LayoutParams);
                         parentLayout.addView(imageView);
                     } else if (paragraph != null) {
-                        TextView textView = getView(getStringBuilder(Collections.singletonList(paragraph), 0) + "\n");
+                        TextView textView = getView(
+                            getStringBuilder(
+                                Collections.singletonList(paragraph),
+                                0,
+                                false
+                            ) +
+                            "\n"
+                        );
                         parentLayout.addView(textView);
                     }
                 }
@@ -471,7 +794,10 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     }
 
     private void loadLibraryData() {
-        SharedPreferences sharedPreferences = getSharedPreferences("LibraryItems", MODE_PRIVATE);
+        SharedPreferences sharedPreferences = getSharedPreferences(
+            "LibraryItems",
+            MODE_PRIVATE
+        );
         String jsonLibrary = sharedPreferences.getString("items", "");
 
         if (!jsonLibrary.isEmpty()) {
@@ -488,7 +814,10 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     }
 
     private void saveLibraryData() {
-        SharedPreferences sharedPreferences = getSharedPreferences("LibraryItems", MODE_PRIVATE);
+        SharedPreferences sharedPreferences = getSharedPreferences(
+            "LibraryItems",
+            MODE_PRIVATE
+        );
         SharedPreferences.Editor editor = sharedPreferences.edit();
         Gson gson = new Gson();
         String jsonLibrary = gson.toJson(libraryItems);
@@ -519,7 +848,12 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             }
         }
 
-        LibraryItem newItem = new LibraryItem(title, url, System.currentTimeMillis(), type);
+        LibraryItem newItem = new LibraryItem(
+            title,
+            url,
+            System.currentTimeMillis(),
+            type
+        );
         libraryItems.add(newItem);
         libraryAdapter.setData(libraryItems);
         saveLibraryData();
@@ -561,7 +895,10 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             currentUrl = "";
 
             // Clear stored paragraph data
-            SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
+            SharedPreferences sharedPreferences = getSharedPreferences(
+                "MySharedPref",
+                MODE_PRIVATE
+            );
             SharedPreferences.Editor editor = sharedPreferences.edit();
             editor.putString("paragraphs", "");
             editor.putString("url", "");
@@ -582,14 +919,22 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         }
 
         // 1. Clean any cached HTML files
-        File downloadsDirectory = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        File downloadsDirectory = getExternalFilesDir(
+            Environment.DIRECTORY_DOWNLOADS
+        );
         if (downloadsDirectory != null && downloadsDirectory.exists()) {
             for (String url : deletedUrls) {
-                File htmlFile = new File(downloadsDirectory, url.hashCode() + ".html");
+                File htmlFile = new File(
+                    downloadsDirectory,
+                    url.hashCode() + ".html"
+                );
                 if (htmlFile.exists()) {
                     boolean deleted = htmlFile.delete();
                     if (!deleted) {
-                        Log.w("MainActivity", "Failed to delete cache file for " + url);
+                        Log.w(
+                            "MainActivity",
+                            "Failed to delete cache file for " + url
+                        );
                     }
                 }
             }
@@ -597,7 +942,10 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
 
         // 2. Clean any stored progress data in SharedPreferences
         // Retrieve all chapters that have progress stored
-        SharedPreferences progressPrefs = getSharedPreferences("ChapterProgress", MODE_PRIVATE);
+        SharedPreferences progressPrefs = getSharedPreferences(
+            "ChapterProgress",
+            MODE_PRIVATE
+        );
         SharedPreferences.Editor progressEditor = progressPrefs.edit();
 
         // Remove progress data for deleted chapters
@@ -680,13 +1028,22 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
-        String[] mimetypes = {"text/html", "application/xhtml+xml", "application/pdf", "application/epub"};
+        String[] mimetypes = {
+            "text/html",
+            "application/xhtml+xml",
+            "application/pdf",
+            "application/epub",
+        };
         intent.putExtra(Intent.EXTRA_MIME_TYPES, mimetypes);
         startActivityForResult(intent, PICK_HTML_FILE);
     }
 
     @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent resultData) {
+    public void onActivityResult(
+        int requestCode,
+        int resultCode,
+        Intent resultData
+    ) {
         super.onActivityResult(requestCode, resultCode, resultData);
         if (requestCode == PICK_HTML_FILE && resultCode == Activity.RESULT_OK) {
             if (resultData != null) {
@@ -695,10 +1052,21 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                     String type = getContentResolver().getType(uri);
                     if (type != null) {
                         if (type.equals("application/pdf")) {
-                            addToLibrary(uri.toString(), getFileName(uri), "pdf");
+                            addToLibrary(
+                                uri.toString(),
+                                getFileName(uri),
+                                "pdf"
+                            );
                             new ParseFileTask().execute(uri);
-                        } else if (type.equals("text/html") || type.equals("application/xhtml+xml")) {
-                            addToLibrary(uri.toString(), getFileName(uri), "html");
+                        } else if (
+                            type.equals("text/html") ||
+                            type.equals("application/xhtml+xml")
+                        ) {
+                            addToLibrary(
+                                uri.toString(),
+                                getFileName(uri),
+                                "html"
+                            );
                             new ParseHTMLFileTask().execute(uri);
                         }
                     }
@@ -711,9 +1079,14 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     private String getFileName(Uri uri) {
         String result = null;
         if (Objects.equals(uri.getScheme(), "content")) {
-            try (android.database.Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
+            try (
+                android.database.Cursor cursor = getContentResolver()
+                    .query(uri, null, null, null, null)
+            ) {
                 if (cursor != null && cursor.moveToFirst()) {
-                    int nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                    int nameIndex = cursor.getColumnIndex(
+                        android.provider.OpenableColumns.DISPLAY_NAME
+                    );
                     if (nameIndex >= 0) {
                         result = cursor.getString(nameIndex);
                     }
@@ -732,22 +1105,26 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     private TextView getView(String paragraph) {
         TextView textView = new TextView(MainActivity.this);
         if (paragraph != null) {
-//            String bionicText = applyBionicReading(paragraph);
-//            textView.setText(Html.fromHtml(bionicText, Html.FROM_HTML_MODE_LEGACY));
-            textView.setText(Html.fromHtml(paragraph, Html.FROM_HTML_MODE_LEGACY));
+            //            String bionicText = applyBionicReading(paragraph);
+            //            textView.setText(Html.fromHtml(bionicText, Html.FROM_HTML_MODE_LEGACY));
+            textView.setText(
+                Html.fromHtml(paragraph, Html.FROM_HTML_MODE_LEGACY)
+            );
         } else {
             textView.setText("");
         }
         textView.setTextSize(20);
         LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
         );
         textView.setLayoutParams(layoutParams);
         textView.setLineSpacing(0, 1.5f); // Line spacing multiplier
         textView.setPadding(0, 20, 0, 20); // Add padding to create paragraph spacing
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            textView.setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD);
+            textView.setJustificationMode(
+                LineBreaker.JUSTIFICATION_MODE_INTER_WORD
+            );
         }
         return textView;
     }
@@ -757,7 +1134,9 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         for (int i = 0; i < parentLayout.getChildCount(); i++) {
             if (parentLayout.getChildAt(i) instanceof TextView textView) {
                 if (textView.getText() != null) {
-                    paragraphs.append(textView.getText().toString()).append(" ,");
+                    paragraphs
+                        .append(textView.getText().toString())
+                        .append(" ,");
                 }
             }
         }
@@ -773,7 +1152,10 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         // Calculate reading progress
         updateReadingProgress(scrollY);
 
-        SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
+        SharedPreferences sharedPreferences = getSharedPreferences(
+            "MySharedPref",
+            MODE_PRIVATE
+        );
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putInt("scrollY", scrollY);
         editor.putString("paragraphs", getParagraphsAsString());
@@ -806,8 +1188,13 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         }
 
         // Calculate progress percentage
-        int progress = Math.min(100, Math.max(0,
-            (int)(100.0f * scrollY / (contentHeight - viewHeight))));
+        int progress = Math.min(
+            100,
+            Math.max(
+                0,
+                (int) ((100.0f * scrollY) / (contentHeight - viewHeight))
+            )
+        );
 
         // Update the appropriate library item
         for (LibraryItem item : libraryItems) {
@@ -824,7 +1211,10 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     @Override
     protected void onResume() {
         super.onResume();
-        SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
+        SharedPreferences sharedPreferences = getSharedPreferences(
+            "MySharedPref",
+            MODE_PRIVATE
+        );
         int scrollY = sharedPreferences.getInt("scrollY", 0);
         String data = sharedPreferences.getString("paragraphs", "");
         currentUrl = sharedPreferences.getString("url", "");
@@ -842,7 +1232,9 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         loadLibraryData();
     }
 
-    private class SwipeGestureListener extends GestureDetector.SimpleOnGestureListener {
+    private class SwipeGestureListener
+        extends GestureDetector.SimpleOnGestureListener {
+
         private static final int SWIPE_THRESHOLD = 100;
         private static final int SWIPE_VELOCITY_THRESHOLD = 100;
         private static final int EDGE_SIZE = 50; // Edge size in pixels for drawer activation
@@ -854,25 +1246,42 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         }
 
         @Override
-        public boolean onFling(@NonNull MotionEvent e1, @NonNull MotionEvent e2, float velocityX, float velocityY) {
+        public boolean onFling(
+            @NonNull MotionEvent e1,
+            @NonNull MotionEvent e2,
+            float velocityX,
+            float velocityY
+        ) {
             boolean result = false;
             try {
                 float diffX = e2.getX() - e1.getX();
                 float diffY = e2.getY() - e1.getY();
                 float startX = e1.getX();
-                boolean isNearLeftEdge = startX < EDGE_SIZE * getResources().getDisplayMetrics().density;
+                boolean isNearLeftEdge =
+                    startX <
+                    EDGE_SIZE * getResources().getDisplayMetrics().density;
 
                 // Only handle drawer opening from left edge
                 if (Math.abs(diffX) > Math.abs(diffY)) {
-                    if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
+                    if (
+                        Math.abs(diffX) > SWIPE_THRESHOLD &&
+                        Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD
+                    ) {
                         if (diffX > 0 && isNearLeftEdge) {
-                        // Right swipe from left edge - open drawer
-                        drawerLayout.openDrawer(findViewById(R.id.navDrawer));
-                        result = true;
-                        } else if (diffX < 0 && drawerLayout.isDrawerOpen(findViewById(R.id.navDrawer))) {
-                        // Left swipe - close drawer if open
-                        drawerLayout.closeDrawers();
-                        result = true;
+                            // Right swipe from left edge - open drawer
+                            drawerLayout.openDrawer(
+                                findViewById(R.id.navDrawer)
+                            );
+                            result = true;
+                        } else if (
+                            diffX < 0 &&
+                            drawerLayout.isDrawerOpen(
+                                findViewById(R.id.navDrawer)
+                            )
+                        ) {
+                            // Left swipe - close drawer if open
+                            drawerLayout.closeDrawers();
+                            result = true;
                         }
                     }
                 }
@@ -885,6 +1294,7 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
 
     @SuppressLint("StaticFieldLeak")
     private class ParseFileTask extends AsyncTask<Uri, Void, List<String>> {
+
         private Uri fileUri;
         private final boolean scrollToBottom;
         private final int savedProgress;
@@ -905,7 +1315,8 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             List<String> paragraphs = new ArrayList<>();
 
             try {
-                InputStream inputStream = getContentResolver().openInputStream(fileUri);
+                InputStream inputStream = getContentResolver()
+                    .openInputStream(fileUri);
                 if (inputStream == null) {
                     return paragraphs;
                 }
@@ -916,20 +1327,30 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
 
                 int numberOfPages = pdfDoc.getNumberOfPages();
                 for (int i = 1; i <= numberOfPages; i++) {
-                    text.append(PdfTextExtractor.getTextFromPage(pdfDoc.getPage(i)));
+                    text.append(
+                        PdfTextExtractor.getTextFromPage(pdfDoc.getPage(i))
+                    );
                 }
 
                 pdfDoc.close();
                 paragraphs.add(text.toString());
                 for (int i = 0; i < paragraphs.size(); i++) {
-                    StringBuilder newParagraph = getStringBuilder(paragraphs, i);
+                    // This is PDF content - apply page number processing
+                    StringBuilder newParagraph = getStringBuilder(
+                        paragraphs,
+                        i,
+                        true
+                    );
                     paragraphs.set(i, newParagraph.toString());
                 }
             } catch (IOException e) {
                 e.printStackTrace();
             }
 
-            SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
+            SharedPreferences sharedPreferences = getSharedPreferences(
+                "MySharedPref",
+                MODE_PRIVATE
+            );
             SharedPreferences.Editor myEdit = sharedPreferences.edit();
             myEdit.putString("url", fileUri.toString());
             myEdit.putString("paragraphs", String.join(" ,", paragraphs));
@@ -956,17 +1377,23 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             ScrollView scrollView = findViewById(R.id.scrollView);
 
             if (scrollToBottom && hasData) {
-                scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_DOWN));
+                scrollView.post(() ->
+                    scrollView.fullScroll(ScrollView.FOCUS_DOWN)
+                );
             } else if (savedProgress > 0 && hasData) {
-                scrollView.post(() -> scrollToSavedPosition(scrollView, savedProgress));
+                scrollView.post(() ->
+                    scrollToSavedPosition(scrollView, savedProgress)
+                );
             } else {
-                scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_UP));
+                scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_UP)
+                );
             }
         }
     }
 
     @SuppressLint("StaticFieldLeak")
     private class ParseHTMLFileTask extends AsyncTask<Uri, Void, List<String>> {
+
         private Uri htmlUri;
         private final boolean scrollToBottom;
         private final int savedProgress;
@@ -986,7 +1413,8 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             htmlUri = uris[0];
             List<String> paragraphs = new ArrayList<>();
             try {
-                InputStream inputStream = getContentResolver().openInputStream(htmlUri);
+                InputStream inputStream = getContentResolver()
+                    .openInputStream(htmlUri);
                 if (inputStream == null) {
                     return paragraphs;
                 }
@@ -1004,7 +1432,10 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                 e.printStackTrace();
             }
 
-            SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
+            SharedPreferences sharedPreferences = getSharedPreferences(
+                "MySharedPref",
+                MODE_PRIVATE
+            );
             SharedPreferences.Editor myEdit = sharedPreferences.edit();
             myEdit.putString("url", htmlUri.toString());
             myEdit.putString("paragraphs", String.join(" ,", paragraphs));
@@ -1027,10 +1458,11 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                     if (paragraph != null && paragraph.contains("http")) {
                         ImageView imageView = new ImageView(MainActivity.this);
                         Picasso.get().load(paragraph).into(imageView);
-                        LinearLayout.LayoutParams LayoutParams = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams LayoutParams =
+                            new LinearLayout.LayoutParams(
                                 LinearLayout.LayoutParams.WRAP_CONTENT,
                                 LinearLayout.LayoutParams.WRAP_CONTENT
-                        );
+                            );
                         imageView.setLayoutParams(LayoutParams);
                         parentLayout.addView(imageView);
                     } else if (paragraph != null) {
@@ -1047,17 +1479,24 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
 
             // Handle scrolling based on context
             if (scrollToBottom && hasData) {
-                scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_DOWN));
+                scrollView.post(() ->
+                    scrollView.fullScroll(ScrollView.FOCUS_DOWN)
+                );
             } else if (savedProgress > 0 && hasData) {
-                scrollView.post(() -> scrollToSavedPosition(scrollView, savedProgress));
+                scrollView.post(() ->
+                    scrollToSavedPosition(scrollView, savedProgress)
+                );
             } else {
-                scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_UP));
+                scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_UP)
+                );
             }
         }
     }
 
     @SuppressLint("StaticFieldLeak")
-    private class WebScrapingTask extends AsyncTask<String, Void, List<String>> {
+    private class WebScrapingTask
+        extends AsyncTask<String, Void, List<String>> {
+
         private String webUrl;
         private final boolean scrollToBottom;
         private final int savedProgress;
@@ -1086,20 +1525,26 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                 return paragraphs;
             }
 
-            File downloadsDirectory = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+            File downloadsDirectory = getExternalFilesDir(
+                Environment.DIRECTORY_DOWNLOADS
+            );
             if (downloadsDirectory == null) {
                 return paragraphs;
             }
 
-            File htmlFile = new File(downloadsDirectory, webUrl.hashCode() + ".html");
+            File htmlFile = new File(
+                downloadsDirectory,
+                webUrl.hashCode() + ".html"
+            );
 
             if (!htmlFile.exists()) {
                 OkHttpClient client = new OkHttpClient();
                 Request request = new Request.Builder().url(webUrl).build();
 
                 try (Response response = client.newCall(request).execute()) {
-                    if (!response.isSuccessful())
-                        throw new IOException("Unexpected code " + response);
+                    if (!response.isSuccessful()) throw new IOException(
+                        "Unexpected code " + response
+                    );
 
                     BufferedSink sink = Okio.buffer(Okio.sink(htmlFile));
                     if (response.body() != null) {
@@ -1134,7 +1579,11 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                     if (element.tagName().equals("p")) {
                         String paragraph = element.text();
                         if (!paragraph.isEmpty()) {
-                            StringBuilder styledParagraph = getStringBuilder(Collections.singletonList(paragraph), 0);
+                            StringBuilder styledParagraph = getStringBuilder(
+                                Collections.singletonList(paragraph),
+                                0,
+                                false
+                            );
                             paragraphs.add(styledParagraph.toString());
                             paragraphs.add("\n\n\n\n");
                         }
@@ -1155,7 +1604,10 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                 e.printStackTrace();
             }
 
-            SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
+            SharedPreferences sharedPreferences = getSharedPreferences(
+                "MySharedPref",
+                MODE_PRIVATE
+            );
             SharedPreferences.Editor myEdit = sharedPreferences.edit();
             myEdit.putString("url", webUrl);
             myEdit.putString("paragraphs", String.join(" ,", paragraphs));
@@ -1170,7 +1622,11 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             hasData = paragraphs != null && !paragraphs.isEmpty();
 
             String title = null;
-            if (paragraphs != null && !paragraphs.isEmpty() && paragraphs.get(0).startsWith("# ")) {
+            if (
+                paragraphs != null &&
+                !paragraphs.isEmpty() &&
+                paragraphs.get(0).startsWith("# ")
+            ) {
                 title = paragraphs.get(0).substring(2);
             }
 
@@ -1179,10 +1635,11 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                     if (paragraph != null && paragraph.contains("http")) {
                         ImageView imageView = new ImageView(MainActivity.this);
                         Picasso.get().load(paragraph).into(imageView);
-                        LinearLayout.LayoutParams LayoutParams = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams LayoutParams =
+                            new LinearLayout.LayoutParams(
                                 LinearLayout.LayoutParams.WRAP_CONTENT,
                                 LinearLayout.LayoutParams.WRAP_CONTENT
-                        );
+                            );
                         imageView.setLayoutParams(LayoutParams);
                         parentLayout.addView(imageView);
                     } else if (paragraph != null) {
@@ -1200,27 +1657,38 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             libraryAdapter.updateCurrentlyReading(webUrl);
 
             // Delayed actions
-            new Handler().postDelayed(() -> {
-                isLoading = false;
+            new Handler()
+                .postDelayed(
+                    () -> {
+                        isLoading = false;
 
-                ScrollView scrollView = findViewById(R.id.scrollView);
+                        ScrollView scrollView = findViewById(R.id.scrollView);
 
-                if (scrollToBottom && hasData) {
-                    // For previous chapter loading, scroll to bottom
-                    scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_DOWN));
-                } else if (savedProgress > 0 && hasData) {
-                    // For loading from library with saved progress
-                    scrollView.post(() -> scrollToSavedPosition(scrollView, savedProgress));
-                } else {
-                    // Default - scroll to top
-                    scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_UP));
-                }
-            }, 1000); // Shorter delay for better UX
+                        if (scrollToBottom && hasData) {
+                            // For previous chapter loading, scroll to bottom
+                            scrollView.post(() ->
+                                scrollView.fullScroll(ScrollView.FOCUS_DOWN)
+                            );
+                        } else if (savedProgress > 0 && hasData) {
+                            // For loading from library with saved progress
+                            scrollView.post(() ->
+                                scrollToSavedPosition(scrollView, savedProgress)
+                            );
+                        } else {
+                            // Default - scroll to top
+                            scrollView.post(() ->
+                                scrollView.fullScroll(ScrollView.FOCUS_UP)
+                            );
+                        }
+                    },
+                    1000
+                ); // Shorter delay for better UX
         }
     }
 
     @SuppressLint("StaticFieldLeak")
     private class ScrapInAdvance extends AsyncTask<String, Void, Void> {
+
         @Override
         protected Void doInBackground(String... strings) {
             String url = strings[0];
@@ -1228,20 +1696,26 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                 return null;
             }
 
-            File downloadsDirectory = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+            File downloadsDirectory = getExternalFilesDir(
+                Environment.DIRECTORY_DOWNLOADS
+            );
             if (downloadsDirectory == null) {
                 return null;
             }
 
-            File htmlFile = new File(downloadsDirectory, url.hashCode() + ".html");
+            File htmlFile = new File(
+                downloadsDirectory,
+                url.hashCode() + ".html"
+            );
 
             if (!htmlFile.exists()) {
                 OkHttpClient client = new OkHttpClient();
                 Request request = new Request.Builder().url(url).build();
 
                 try (Response response = client.newCall(request).execute()) {
-                    if (!response.isSuccessful())
-                        throw new IOException("Unexpected code " + response);
+                    if (!response.isSuccessful()) throw new IOException(
+                        "Unexpected code " + response
+                    );
 
                     if (response.body() != null) {
                         BufferedSink sink = Okio.buffer(Okio.sink(htmlFile));
@@ -1254,7 +1728,9 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                             Document document = Jsoup.parse(htmlFile, "UTF-8");
                             title = document.title();
                             if (title.isEmpty()) {
-                                Element titleElement = document.selectFirst("h1");
+                                Element titleElement = document.selectFirst(
+                                    "h1"
+                                );
                                 if (titleElement != null) {
                                     title = titleElement.text();
                                 }
@@ -1277,7 +1753,12 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
                             }
 
                             if (!exists) {
-                                LibraryItem newItem = new LibraryItem(finalTitle, url, System.currentTimeMillis(), "web");
+                                LibraryItem newItem = new LibraryItem(
+                                    finalTitle,
+                                    url,
+                                    System.currentTimeMillis(),
+                                    "web"
+                                );
                                 libraryItems.add(newItem);
                                 saveLibraryData();
                             }
@@ -1309,8 +1790,12 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             if (word != null && !word.isEmpty()) {
                 int splitIndex = (int) Math.ceil(word.length() * 0.4); // Emphasize the first 40% of the word
                 if (splitIndex > 0 && splitIndex < word.length()) {
-                    bionicText.append("<b>").append(word.substring(0, splitIndex)).append("</b>")
-                            .append(word.substring(splitIndex)).append(" ");
+                    bionicText
+                        .append("<b>")
+                        .append(word.substring(0, splitIndex))
+                        .append("</b>")
+                        .append(word.substring(splitIndex))
+                        .append(" ");
                 } else {
                     bionicText.append(word).append(" ");
                 }
@@ -1351,7 +1836,10 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
             libraryAdapter.updateCurrentlyReading(url);
 
             // Save current content before loading new chapter
-            SharedPreferences sharedPreferences = getSharedPreferences("MySharedPref", MODE_PRIVATE);
+            SharedPreferences sharedPreferences = getSharedPreferences(
+                "MySharedPref",
+                MODE_PRIVATE
+            );
             SharedPreferences.Editor myEdit = sharedPreferences.edit();
             myEdit.putString("url", url);
             myEdit.apply();
@@ -1372,7 +1860,9 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
         Pattern pattern = Pattern.compile("(\\d+)(?!.*\\d)");
         Matcher matcher = pattern.matcher(url);
         if (matcher.find()) {
-            int chapterNumber = Integer.parseInt(Objects.requireNonNull(matcher.group(1)));
+            int chapterNumber = Integer.parseInt(
+                Objects.requireNonNull(matcher.group(1))
+            );
             if (chapterNumber > 1) { // Don't go below chapter 1
                 chapterNumber--;
                 url = matcher.replaceFirst(String.valueOf(chapterNumber));
@@ -1418,8 +1908,15 @@ public class MainActivity extends AppCompatActivity implements LibraryAdapter.On
     /**
      * Scrolls to a position based on saved progress percentage
      */
-    private void scrollToSavedPosition(ScrollView scrollView, int progressPercentage) {
-        if (scrollView == null || scrollView.getChildCount() == 0 || progressPercentage <= 0) {
+    private void scrollToSavedPosition(
+        ScrollView scrollView,
+        int progressPercentage
+    ) {
+        if (
+            scrollView == null ||
+            scrollView.getChildCount() == 0 ||
+            progressPercentage <= 0
+        ) {
             return;
         }
 
